@@ -1,0 +1,308 @@
+<div id="wadahToast" aria-live="polite"></div>
+<div id="areaCetak"></div>
+
+<script>
+  /* Helper bersama halaman siswa & admin. */
+
+  /** google.script.run → Promise. Gagal jaringan → reject. */
+  function panggil(namaFungsi) {
+    const argumen = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function(resolve, reject) {
+      const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+      runner[namaFungsi].apply(runner, argumen);
+    });
+  }
+
+  /**
+   * Seperti panggil(), tetapi: sesi berakhir → panggil window.saatSesiBerakhir;
+   * berhasil:false → reject dengan pesan server.
+   */
+  function api(namaFungsi) {
+    return panggil.apply(null, arguments).then(function(r) {
+      if (r && r.sesiBerakhir) {
+        if (window.saatSesiBerakhir) window.saatSesiBerakhir(r.pesan);
+        throw new Error(r.pesan);
+      }
+      if (!r || !r.berhasil) throw new Error((r && r.pesan) || 'Terjadi kesalahan.');
+      return r;
+    }, function(err) {
+      console.error(err);
+      throw new Error('Tidak dapat terhubung ke server. Periksa internet lalu coba lagi.');
+    });
+  }
+
+  function $(sel, induk) { return (induk || document).querySelector(sel); }
+  function $$(sel, induk) { return Array.prototype.slice.call((induk || document).querySelectorAll(sel)); }
+
+  function esc(nilai) {
+    return String(nilai === null || nilai === undefined ? '' : nilai)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function toast(pesan, jenis) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + (jenis || '');
+    el.textContent = pesan;
+    $('#wadahToast').appendChild(el);
+    setTimeout(function() { el.remove(); }, jenis === 'galat' ? 6000 : 3500);
+  }
+
+  // ---------- Penyimpanan lokal (bisa diblokir browser) ----------
+  function simpanLokal(kunci, nilai, sesiSaja) {
+    try { (sesiSaja ? sessionStorage : localStorage).setItem(kunci, JSON.stringify(nilai)); } catch (e) {}
+  }
+  function ambilLokal(kunci, sesiSaja) {
+    try { return JSON.parse((sesiSaja ? sessionStorage : localStorage).getItem(kunci)); } catch (e) { return null; }
+  }
+  function hapusLokal(kunci, sesiSaja) {
+    try { (sesiSaja ? sessionStorage : localStorage).removeItem(kunci); } catch (e) {}
+  }
+
+  // ---------- Format ----------
+  const NAMA_BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  function dua(n) { return (n < 10 ? '0' : '') + n; }
+
+  function formatTanggal(ms, tanpaJam) {
+    if (!ms) return '-';
+    const d = new Date(ms);
+    return d.getDate() + ' ' + NAMA_BULAN[d.getMonth()] + ' ' + d.getFullYear() +
+      (tanpaJam ? '' : ', ' + dua(d.getHours()) + '.' + dua(d.getMinutes()));
+  }
+
+  function formatDurasi(detik) {
+    detik = Math.max(0, Math.floor(detik || 0));
+    const j = Math.floor(detik / 3600);
+    const m = Math.floor((detik % 3600) / 60);
+    const s = detik % 60;
+    if (j) return j + ' jam ' + m + ' menit';
+    if (m) return m + ' menit ' + s + ' detik';
+    return s + ' detik';
+  }
+
+  function formatJam(detik) {
+    detik = Math.max(0, Math.floor(detik));
+    const j = Math.floor(detik / 3600);
+    return (j ? j + ':' : '') + dua(Math.floor((detik % 3600) / 60)) + ':' + dua(detik % 60);
+  }
+
+  /** ms → nilai untuk <input type="datetime-local"> (waktu lokal browser). */
+  function keInputWaktu(ms) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    return d.getFullYear() + '-' + dua(d.getMonth() + 1) + '-' + dua(d.getDate()) + 'T' + dua(d.getHours()) + ':' + dua(d.getMinutes());
+  }
+  function dariInputWaktu(teks) {
+    return teks ? new Date(teks).getTime() : null;
+  }
+
+  // ---------- Modal ----------
+  /**
+   * opsi = { judul, isi (HTML), lebar, tombol: [{ teks, kelas, aksi(modal) → false untuk tetap terbuka }] }
+   */
+  function bukaModal(opsi) {
+    const latar = document.createElement('div');
+    latar.className = 'latar-modal';
+    latar.innerHTML =
+      '<div class="modal' + (opsi.lebar ? ' lebar' : '') + '" role="dialog" aria-modal="true">' +
+        '<div class="modal-kepala"><h3>' + esc(opsi.judul) + '</h3>' +
+        '<button class="tombol-ikon" data-tutup aria-label="Tutup">✕</button></div>' +
+        '<div class="modal-isi">' + (opsi.isi || '') + '</div>' +
+        (opsi.tombol && opsi.tombol.length ? '<div class="modal-kaki"></div>' : '') +
+      '</div>';
+    const modal = latar.firstChild;
+    modal.tutup = function() { latar.remove(); if (opsi.saatTutup) opsi.saatTutup(); };
+
+    (opsi.tombol || []).forEach(function(t) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tombol ' + (t.kelas || '');
+      b.textContent = t.teks;
+      b.addEventListener('click', function() {
+        const hasil = t.aksi ? t.aksi(modal, b) : undefined;
+        if (hasil !== false && !(hasil && hasil.then)) modal.tutup();
+      });
+      $('.modal-kaki', modal).appendChild(b);
+    });
+    $('[data-tutup]', modal).addEventListener('click', modal.tutup);
+    latar.addEventListener('mousedown', function(e) { if (e.target === latar && !opsi.wajib) modal.tutup(); });
+    document.body.appendChild(latar);
+    const fokus = $('input, select, textarea', modal);
+    if (fokus) fokus.focus();
+    return modal;
+  }
+
+  function konfirmasi(judul, pesan, teksYa, kelasYa) {
+    return new Promise(function(resolve) {
+      let dijawab = false;
+      bukaModal({
+        judul: judul,
+        isi: '<p class="teks-soal" style="margin:0">' + esc(pesan) + '</p>',
+        saatTutup: function() { if (!dijawab) resolve(false); },
+        tombol: [
+          { teks: 'Batal', kelas: 'sekunder' },
+          { teks: teksYa || 'Ya', kelas: kelasYa || '', aksi: function() { dijawab = true; resolve(true); } }
+        ]
+      });
+    });
+  }
+
+  /** Menjalankan aksi async pada tombol: tampilkan spinner & cegah klik ganda. */
+  function denganMemuat(tombol, janji) {
+    const teks = tombol.innerHTML;
+    tombol.disabled = true;
+    tombol.innerHTML = '<span class="putar"></span> Memproses...';
+    return janji.finally(function() {
+      tombol.disabled = false;
+      tombol.innerHTML = teks;
+    });
+  }
+
+  // ---------- Gambar (Google Drive) ----------
+  const CACHE_GAMBAR = {};
+
+  /** Tampilkan gambar Drive; bila URL publik gagal, ambil lewat server. */
+  function pasangGambar(img, id, token) {
+    if (!id) { img.hidden = true; return; }
+    img.hidden = false;
+    if (CACHE_GAMBAR[id]) { img.src = CACHE_GAMBAR[id]; return; }
+    img.onerror = function() {
+      img.onerror = null;
+      panggil('ambilGambar', token, id).then(function(r) {
+        if (r && r.berhasil) { CACHE_GAMBAR[id] = r.dataUrl; img.src = r.dataUrl; }
+        else img.hidden = true;
+      }).catch(function() { img.hidden = true; });
+    };
+    img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(id);
+  }
+
+  /** Perkecil gambar sebelum diunggah (hemat kuota & lebih cepat dibuka siswa). */
+  function siapkanGambar(file, lebarMaks) {
+    lebarMaks = lebarMaks || 1200;
+    return new Promise(function(resolve, reject) {
+      if (!file || !/^image\//.test(file.type)) return reject(new Error('Pilih berkas gambar (PNG/JPG).'));
+      const baca = new FileReader();
+      baca.onerror = function() { reject(new Error('Gagal membaca gambar.')); };
+      baca.onload = function() {
+        const img = new Image();
+        img.onerror = function() { reject(new Error('Gambar tidak dapat dibuka.')); };
+        img.onload = function() {
+          if (file.type === 'image/gif' || img.width <= lebarMaks) {
+            return resolve({ nama: file.name, mime: file.type, base64: baca.result.split(',')[1], dataUrl: baca.result });
+          }
+          const kanvas = document.createElement('canvas');
+          kanvas.width = lebarMaks;
+          kanvas.height = Math.round(img.height * lebarMaks / img.width);
+          kanvas.getContext('2d').drawImage(img, 0, 0, kanvas.width, kanvas.height);
+          const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const dataUrl = kanvas.toDataURL(mime, 0.85);
+          resolve({ nama: file.name.replace(/\.\w+$/, '') + (mime === 'image/png' ? '.png' : '.jpg'), mime: mime, base64: dataUrl.split(',')[1], dataUrl: dataUrl });
+        };
+        img.src = baca.result;
+      };
+      baca.readAsDataURL(file);
+    });
+  }
+
+  // ---------- Tabel tempel / CSV ----------
+  /** Teks dari Excel/Sheets (tab) atau CSV (koma/titik koma) → array 2D. */
+  function parseTabel(teks) {
+    teks = String(teks || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+    if (!teks.trim()) return [];
+    const barisPertama = teks.split('\n')[0];
+    const pemisah = barisPertama.indexOf('\t') !== -1 ? '\t'
+      : (barisPertama.split(';').length > barisPertama.split(',').length ? ';' : ',');
+
+    const hasil = [];
+    let baris = [];
+    let sel = '';
+    let kutip = false;
+    for (let i = 0; i < teks.length; i++) {
+      const c = teks[i];
+      if (kutip) {
+        if (c === '"' && teks[i + 1] === '"') { sel += '"'; i++; }
+        else if (c === '"') kutip = false;
+        else sel += c;
+      } else if (c === '"' && sel === '') {
+        kutip = true;
+      } else if (c === pemisah) {
+        baris.push(sel); sel = '';
+      } else if (c === '\n') {
+        baris.push(sel); hasil.push(baris); baris = []; sel = '';
+      } else {
+        sel += c;
+      }
+    }
+    baris.push(sel);
+    hasil.push(baris);
+    return hasil
+      .map(function(b) { return b.map(function(x) { return x.trim(); }); })
+      .filter(function(b) { return b.some(function(x) { return x !== ''; }); });
+  }
+
+  /**
+   * Mengubah tabel 2D menjadi objek memakai header bila baris pertama
+   * cocok dengan nama kolom; bila tidak, memakai urutan kolom bawaan.
+   * kolom = [{ kunci: 'nama', header: ['NAMA', 'NAMA_SISWA'] }, ...]
+   */
+  function tabelKeObjek(tabel, kolom) {
+    if (!tabel.length) return [];
+    const norm = function(s) { return String(s).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+    const pertama = tabel[0].map(norm);
+    const posisi = kolom.map(function(k) {
+      return pertama.findIndex(function(h) { return k.header.map(norm).indexOf(h) !== -1; });
+    });
+    const adaHeader = posisi.filter(function(p) { return p !== -1; }).length >= 2;
+    const data = adaHeader ? tabel.slice(1) : tabel;
+    return data.map(function(b, i) {
+      const obj = { nomor: i + (adaHeader ? 2 : 1) };
+      kolom.forEach(function(k, j) {
+        const p = adaHeader ? posisi[j] : j;
+        obj[k.kunci] = p !== -1 && b[p] !== undefined ? b[p] : '';
+      });
+      return obj;
+    });
+  }
+
+  function bacaBerkasTeks(file) {
+    return new Promise(function(resolve, reject) {
+      const r = new FileReader();
+      r.onload = function() { resolve(r.result); };
+      r.onerror = function() { reject(new Error('Gagal membaca berkas.')); };
+      r.readAsText(file);
+    });
+  }
+
+  function unduhCsv(namaFile, baris) {
+    const isi = '﻿' + baris.map(function(b) {
+      return b.map(function(v) {
+        const s = String(v === null || v === undefined ? '' : v);
+        return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    }).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([isi], { type: 'text/csv;charset=utf-8' }));
+    a.download = namaFile;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  /** Mencetak kartu login: akun = [{ nama, kelas, username, password }] */
+  function cetakKartuLogin(akun, namaSekolah, urlAplikasi) {
+    $('#areaCetak').innerHTML = '<div class="kartu-login-grid">' + akun.map(function(a) {
+      return '<div class="kartu-login"><h4>Kartu Login Simulasi TKA — ' + esc(namaSekolah || '') + '</h4>' +
+        '<table><tr><td>Nama</td><td><b>' + esc(a.nama) + '</b></td></tr>' +
+        '<tr><td>Kelas</td><td>' + esc(a.kelas) + '</td></tr>' +
+        '<tr><td>Username</td><td class="sandi">' + esc(a.username) + '</td></tr>' +
+        '<tr><td>Kata sandi</td><td class="sandi">' + esc(a.password) + '</td></tr></table>' +
+        (urlAplikasi ? '<div class="kecil redup" style="margin-top:6px;word-break:break-all">' + esc(urlAplikasi) + '</div>' : '') +
+        '</div>';
+    }).join('') + '</div>';
+    document.body.classList.add('mode-cetak');
+    setTimeout(function() {
+      window.print();
+      document.body.classList.remove('mode-cetak');
+    }, 100);
+  }
+</script>
