@@ -1,0 +1,8 @@
+{
+  "name": "simulasi-tka",
+  "private": true,
+  "description": "Simulasi TKA SDN Johar Baru 01 Pagi (Google Apps Script + Google Sheets)",
+  "scripts": {
+    "test": "node --test tests/kode.test.js"
+  }
+}
