@@ -1,0 +1,6 @@
+node_modules
+dist
+uploads
+.env
+server/generated
+public/mediapipe/wasm

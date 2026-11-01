@@ -1,0 +1,211 @@
+// Database Simulasi TKA. Struktur mengikuti versi Google Spreadsheet,
+// ditambah pengawasan ujian (pelanggaran & deteksi wajah).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../server/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Peran {
+  ADMIN
+  GURU
+}
+
+enum JenisSesiLogin {
+  SISWA
+  STAF
+}
+
+enum TipeSoal {
+  PG  // pilihan ganda, satu kunci
+  PGK // pilihan ganda kompleks, kunci lebih dari satu
+}
+
+enum StatusSesiUjian {
+  BERLANGSUNG
+  SELESAI
+}
+
+enum StatusHasil {
+  SELESAI
+  WAKTU_HABIS
+  DIHENTIKAN  // dikirim paksa oleh pengawas
+  PELANGGARAN // dikirim otomatis karena batas pelanggaran tercapai
+}
+
+enum JenisPelanggaran {
+  KELUAR_LAYAR_PENUH
+  PINDAH_TAB
+  WAJAH_TIDAK_TERLIHAT
+  WAJAH_LEBIH_DARI_SATU
+  KAMERA_TIDAK_AKTIF
+  SALIN_TEMPEL
+  PINTASAN_TERLARANG
+}
+
+model Pengaturan {
+  kunci String @id
+  nilai String
+}
+
+model Pengguna {
+  id             String    @id @default(cuid())
+  nama           String
+  username       String    @unique
+  passwordHash   String
+  peran          Peran     @default(GURU)
+  aktif          Boolean   @default(true)
+  loginTerakhir  DateTime?
+  dibuat         DateTime  @default(now())
+  sesi           SesiLogin[]
+}
+
+model Siswa {
+  id            String    @id @default(cuid())
+  nisn          String    @default("")
+  nama          String
+  kelas         String
+  username      String    @unique
+  passwordHash  String
+  aktif         Boolean   @default(true)
+  loginTerakhir DateTime?
+  dibuat        DateTime  @default(now())
+  sesi          SesiLogin[]
+  sesiUjian     SesiUjian[]
+  hasil         Hasil[]
+
+  @@index([kelas])
+}
+
+model SesiLogin {
+  token      String         @id
+  jenis      JenisSesiLogin
+  pengguna   Pengguna?      @relation(fields: [penggunaId], references: [id], onDelete: Cascade)
+  penggunaId String?
+  siswa      Siswa?         @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+  siswaId    String?
+  kadaluarsa DateTime
+  dibuat     DateTime       @default(now())
+
+  @@index([kadaluarsa])
+}
+
+model Soal {
+  id            String   @id // mis. MTK001
+  mataPelajaran String
+  kelas         String
+  pertanyaan    String
+  opsi          String[] // selalu 4: A, B, C, D
+  kunci         String   // "B" atau "A,C"
+  skor          Float    @default(1)
+  tipe          TipeSoal @default(PG)
+  gambar        String?  // nama berkas di UPLOAD_DIR/gambar
+  pembahasan    String   @default("")
+  aktif         Boolean  @default(true)
+  dibuat        DateTime @default(now())
+  diubah        DateTime @updatedAt
+
+  @@index([mataPelajaran, kelas])
+}
+
+model Ujian {
+  id                  String    @id @default(cuid())
+  nama                String
+  mataPelajaran       String
+  kelas               String[]  // kosong = semua kelas
+  durasiMenit         Int       @default(60) // 0 = tanpa batas
+  jumlahSoal          Int       @default(0)  // 0 = semua soal
+  waktuMulai          DateTime?
+  waktuSelesai        DateTime?
+  token               String?
+  acakSoal            Boolean   @default(true)
+  acakOpsi            Boolean   @default(false)
+  tampilkanNilai      Boolean   @default(true)
+  tampilkanPembahasan Boolean   @default(false)
+  maksPercobaan       Int       @default(1)  // 0 = tidak terbatas
+  wajibLayarPenuh     Boolean   @default(true)
+  wajibKamera         Boolean   @default(false)
+  maksPelanggaran     Int       @default(5)  // 0 = tidak dikirim otomatis
+  aktif               Boolean   @default(true)
+  dibuat              DateTime  @default(now())
+  sesi                SesiUjian[]
+}
+
+model SesiUjian {
+  id                String          @id @default(cuid())
+  ujian             Ujian           @relation(fields: [ujianId], references: [id], onDelete: Cascade)
+  ujianId           String
+  siswa             Siswa           @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+  siswaId           String
+  mulai             DateTime        @default(now())
+  batasWaktu        DateTime?
+  // [{ i: idSoal, o: [indeks opsi asli per posisi tampil] }]
+  urutan            Json
+  // { idSoal: "A" | "A,C" } dalam huruf ASLI
+  jawaban           Json            @default("{}")
+  ragu              String[]        @default([])
+  status            StatusSesiUjian @default(BERLANGSUNG)
+  terakhirAktif     DateTime        @default(now())
+  jumlahPelanggaran Int             @default(0)
+  pelanggaran       Pelanggaran[]
+  hasil             Hasil?
+
+  @@index([siswaId, status])
+  @@index([status])
+}
+
+model Pelanggaran {
+  id          String           @id @default(cuid())
+  sesiUjian   SesiUjian        @relation(fields: [sesiUjianId], references: [id], onDelete: Cascade)
+  sesiUjianId String
+  jenis       JenisPelanggaran
+  waktu       DateTime         @default(now())
+  foto        String?          // nama berkas di UPLOAD_DIR/pelanggaran
+  detail      String           @default("")
+
+  @@index([sesiUjianId])
+}
+
+// Hasil menyimpan salinan nama/kelas/ujian agar tetap terbaca
+// walaupun siswa atau ujian dihapus.
+model Hasil {
+  id                String      @id @default(cuid())
+  sesiUjian         SesiUjian?  @relation(fields: [sesiUjianId], references: [id], onDelete: SetNull)
+  sesiUjianId       String?     @unique
+  ujianId           String?
+  namaUjian         String
+  mataPelajaran     String
+  siswa             Siswa?      @relation(fields: [siswaId], references: [id], onDelete: SetNull)
+  siswaId           String?
+  nisn              String
+  namaSiswa         String
+  kelas             String
+  username          String
+  tanggal           DateTime    @default(now())
+  nilai             Int
+  benar             Int
+  salah             Int
+  kosong            Int
+  durasiDetik       Int
+  status            StatusHasil
+  jawaban           Json        @default("{}")
+  jumlahPelanggaran Int         @default(0)
+
+  @@index([ujianId])
+  @@index([siswaId])
+}
+
+model LogAktivitas {
+  id       String   @id @default(cuid())
+  waktu    DateTime @default(now())
+  pengguna String
+  peran    String
+  aksi     String
+  detail   String   @default("")
+
+  @@index([waktu])
+}

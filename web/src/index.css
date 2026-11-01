@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/nunito';
+
+/* Token desain: lihat DESIGN.md untuk alasan tiap warna. */
+@theme inline {
+  --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
+
+  --color-background: var(--kertas);
+  --color-foreground: var(--tinta);
+  --color-card: #ffffff;
+  --color-card-foreground: var(--tinta);
+  --color-popover: #ffffff;
+  --color-popover-foreground: var(--tinta);
+  --color-primary: var(--jeruk);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ffffff;
+  --color-secondary-foreground: var(--tinta);
+  --color-muted: #f4ece0;
+  --color-muted-foreground: #5b6475;
+  --color-accent: var(--jeruk-muda);
+  --color-accent-foreground: var(--tinta);
+  --color-destructive: var(--bata);
+  --color-border: #e6dccd;
+  --color-input: #cfc3b1;
+  --color-ring: var(--jeruk);
+
+  --color-tinta: var(--tinta);
+  --color-kertas: var(--kertas);
+  --color-jeruk: var(--jeruk);
+  --color-jeruk-tua: #9a3412;
+  --color-jeruk-muda: var(--jeruk-muda);
+  --color-daun: var(--daun);
+  --color-daun-muda: #e3f2e6;
+  --color-matahari: var(--matahari);
+  --color-matahari-muda: #fff3bf;
+  --color-bata: var(--bata);
+  --color-bata-muda: #fde4e1;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Motif "stiker": bayangan padat tanpa blur sebagai penanda elevasi. */
+  --shadow-stiker: 4px 4px 0 0 var(--tinta);
+  --shadow-stiker-kecil: 2px 2px 0 0 var(--tinta);
+}
+
+:root {
+  --tinta: #1e2a3b;
+  --kertas: #fff8ec;
+  --jeruk: #c2410c;
+  --jeruk-muda: #ffe8d6;
+  --daun: #237032;
+  --matahari: #ffd43b;
+  --bata: #b42318;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-weight: 500;
+  }
+  h1, h2, h3 {
+    @apply font-extrabold tracking-tight;
+  }
+  :focus-visible {
+    outline: 3px solid var(--jeruk);
+    outline-offset: 2px;
+  }
+}
+
+@utility stiker {
+  border: 2px solid var(--tinta);
+  box-shadow: var(--shadow-stiker);
+}
+
+@utility stiker-kecil {
+  border: 2px solid var(--tinta);
+  box-shadow: var(--shadow-stiker-kecil);
+}
+
+/* Area ujian: teks tidak bisa diblok/disalin (lihat useAntiContek). */
+@utility tanpa-blok {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media print {
+  .jangan-cetak { display: none !important; }
+}
+
+/* Cetak kartu login: hanya area cetak yang tampil di kertas. */
+.area-cetak { display: none; }
+@media print {
+  body.mode-cetak > *:not(.area-cetak) { display: none !important; }
+  body.mode-cetak .area-cetak { display: block; }
+  body.mode-cetak { background: white; }
+}

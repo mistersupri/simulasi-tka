@@ -1,8 +1,14 @@
-# Simulasi TKA — SDN Johar Baru 01 Pagi
+# Simulasi TKA: SDN Johar Baru 01 Pagi
 
 Aplikasi web untuk simulasi Tes Kemampuan Akademik (TKA) berbasis **Google Apps Script**.
 Datanya disimpan di **Google Spreadsheet**, sedangkan gambar soal, logo, backup, dan
 file ekspor disimpan di **Google Drive**. Tidak perlu server atau hosting berbayar.
+
+> **Dua versi tersedia**
+> - **Versi Google Apps Script** (dokumen ini, folder `apps-script/`): tanpa server, database Google Spreadsheet.
+> - **Versi server** (folder [`web/`](web/README.md)): Vite + React + Express + PostgreSQL (Prisma),
+>   dengan desain baru, mode layar penuh, anti salin, dan deteksi wajah saat ujian.
+>   Data versi Google Spreadsheet bisa dipindahkan lewat menu Pengaturan.
 
 ## Fitur
 
