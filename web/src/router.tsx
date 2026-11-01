@@ -9,7 +9,7 @@ function TidakDitemukan() {
   return (
     <main className="mx-auto max-w-md px-4 py-24 text-center">
       <h1 className="text-2xl">Halaman tidak ditemukan</h1>
-      <p className="mt-2 text-muted-foreground">Alamat yang kamu buka tidak ada.</p>
+      <p className="mt-2 text-muted-foreground">Alamat yang Anda buka tidak ditemukan.</p>
       <Link to="/" className={buttonVariants({ className: 'mt-6' })}>Kembali ke beranda</Link>
     </main>
   );

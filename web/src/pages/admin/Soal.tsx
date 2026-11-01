@@ -77,9 +77,9 @@ export default function HalamanSoal() {
         <Button variant="outline" disabled={!semua.length} onClick={() => unduhCsv('bank-soal.csv', [
           KOLOM_IMPOR.map((k) => k.header[0]),
           ...semua.map((s) => [s.id, s.mataPelajaran, s.kelas, s.pertanyaan, ...s.opsi, s.kunci, s.skor, s.tipe, s.pembahasan]),
-        ])}><DownloadSimple weight="bold" /> Unduh</Button>
-        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple weight="bold" /> Impor</Button>
-        <Button onClick={() => setForm('baru')}><Plus weight="bold" /> Tambah soal</Button>
+        ])}><DownloadSimple /> Unduh</Button>
+        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple /> Impor</Button>
+        <Button onClick={() => setForm('baru')}><Plus /> Tambah soal</Button>
       </KepalaHalaman>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
@@ -99,7 +99,7 @@ export default function HalamanSoal() {
         <Button size="sm" variant="outline" onClick={() => massal.mutate({ aksi: 'nonaktif' })}>Nonaktifkan</Button>
         <Button size="sm" variant="destructive" onClick={async () => {
           if (await konfirmasi({ judul: `Hapus ${pilihan.dipilih.size} soal?`, pesan: 'Soal dan gambarnya dihapus permanen. Hasil ujian yang sudah ada tetap tersimpan.', ya: 'Hapus', bahaya: true })) massal.mutate({ aksi: 'hapus' });
-        }}><Trash weight="bold" /> Hapus</Button>
+        }}><Trash /> Hapus</Button>
       </BilahPilihan>
 
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !data.length ? (
@@ -120,16 +120,16 @@ export default function HalamanSoal() {
                 <TableCell><Checkbox aria-label={`Pilih ${s.id}`} checked={pilihan.dipilih.has(s.id)} onCheckedChange={(v) => pilihan.ubah(s.id, !!v)} /></TableCell>
                 <TableCell><b>{s.id}</b><div className="text-xs text-muted-foreground">{s.mataPelajaran} · kls {s.kelas}</div></TableCell>
                 <TableCell className="max-w-md">
-                  <p className="line-clamp-2">{s.gambar && <IkonGambar weight="bold" className="mr-1 inline size-4" aria-label="Bergambar" />}{s.pertanyaan}</p>
-                  {s.tipe === 'PGK' && <Badge variant="jeruk" className="mt-1">PG kompleks</Badge>}
+                  <p className="line-clamp-2">{s.gambar && <IkonGambar className="mr-1 inline size-4" aria-label="Bergambar" />}{s.pertanyaan}</p>
+                  {s.tipe === 'PGK' && <Badge variant="biru" className="mt-1">PG kompleks</Badge>}
                 </TableCell>
-                <TableCell className="font-extrabold">{s.kunci}</TableCell>
+                <TableCell className="font-semibold">{s.kunci}</TableCell>
                 <TableCell>{s.skor}</TableCell>
-                <TableCell><Badge variant={s.aktif ? 'daun' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
+                <TableCell><Badge variant={s.aktif ? 'hijau' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
-                    <Button size="icon-sm" variant="ghost" aria-label={`Pratinjau ${s.id}`} onClick={() => setPratinjau(s)}><Eye weight="bold" /></Button>
-                    <Button size="icon-sm" variant="ghost" aria-label={`Ubah ${s.id}`} onClick={() => setForm(s)}><PencilSimple weight="bold" /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Pratinjau ${s.id}`} onClick={() => setPratinjau(s)}><Eye /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Ubah ${s.id}`} onClick={() => setForm(s)}><PencilSimple /></Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -240,11 +240,11 @@ function FormSoal({ soal, daftarMapel, tutup }: { soal: Soal | null; daftarMapel
             <div className="space-y-1.5"><Label htmlFor="s-tanya">Pertanyaan</Label><Textarea id="s-tanya" rows={4} value={d.pertanyaan} onChange={(e) => ubah('pertanyaan', e.target.value)} required /></div>
 
             <div className="space-y-1.5">
-              <span className="text-sm font-bold">Gambar (opsional)</span>
+              <span className="text-sm font-semibold">Gambar (opsional)</span>
               {d.gambar && <GambarSoal nama={d.gambar} className="max-h-48" />}
               <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border-2 border-tinta bg-white px-3 text-[13px] font-bold hover:bg-muted focus-within:outline-3 focus-within:outline-jeruk">
-                  <UploadSimple weight="bold" className="size-4" /> {mengunggah ? 'Mengunggah...' : d.gambar ? 'Ganti gambar' : 'Pilih gambar'}
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
+                  <UploadSimple className="size-4" /> {mengunggah ? 'Mengunggah...' : d.gambar ? 'Ganti gambar' : 'Pilih gambar'}
                   <input type="file" accept="image/*" className="sr-only" disabled={mengunggah} onChange={(e) => unggahGambar(e.target.files?.[0])} />
                 </label>
                 {d.gambar && <Button type="button" size="sm" variant="ghost" onClick={() => ubah('gambar', null)}>Hapus gambar</Button>}
@@ -253,15 +253,15 @@ function FormSoal({ soal, daftarMapel, tutup }: { soal: Soal | null; daftarMapel
             </div>
 
             <fieldset className="space-y-2">
-              <legend className="text-sm font-bold">
+              <legend className="text-sm font-semibold">
                 Pilihan jawaban <span className="font-semibold text-muted-foreground">({d.tipe === 'PGK' ? 'tandai SEMUA jawaban benar' : 'tandai satu jawaban benar'})</span>
               </legend>
               {HURUF.map((h, i) => (
                 <div key={h} className="flex items-center gap-2">
                   <button
                     type="button" onClick={() => pilihKunci(h)} aria-pressed={d.kunci.includes(h)} aria-label={`Jadikan ${h} kunci jawaban`}
-                    className={cn('grid size-11 shrink-0 place-content-center border-2 font-extrabold', d.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
-                      d.kunci.includes(h) ? 'border-daun bg-daun text-white' : 'border-tinta bg-white')}
+                    className={cn('grid size-11 shrink-0 place-content-center border font-semibold', d.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
+                      d.kunci.includes(h) ? 'border-hijau bg-hijau text-white' : 'border-input bg-white')}
                   >{h}</button>
                   <Input aria-label={`Opsi ${h}`} value={d.opsi[i]} onChange={(e) => ubah('opsi', d.opsi.map((o, j) => (j === i ? e.target.value : o)))} required />
                 </div>
@@ -273,7 +273,7 @@ function FormSoal({ soal, daftarMapel, tutup }: { soal: Soal | null; daftarMapel
               <div className="space-y-1.5"><Label htmlFor="s-bahas">Pembahasan (opsional)</Label><Textarea id="s-bahas" rows={2} value={d.pembahasan} onChange={(e) => ubah('pembahasan', e.target.value)} placeholder="Tampil ke siswa bila ujian mengizinkan pembahasan" /></div>
             </div>
             <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => ubah('aktif', v)} /> Soal aktif (bisa muncul di ujian)</Label>
-            {galat && <p role="alert" className="rounded-md bg-bata-muda px-3 py-2 text-sm font-bold text-bata">{galat}</p>}
+            {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={tutup}>Batal</Button>
@@ -298,12 +298,12 @@ function DialogPratinjau({ soal: s, tutup }: { soal: Soal | null; tutup: () => v
               <GambarSoal nama={s.gambar} />
               <ul className="mt-3 space-y-2">
                 {s.opsi.map((o, i) => (
-                  <li key={i} className={cn('rounded-md border-2 px-3 py-2', s.kunci.includes(HURUF[i]) ? 'border-daun bg-daun-muda font-bold' : 'border-border')}>
+                  <li key={i} className={cn('rounded-md border px-3 py-2', s.kunci.includes(HURUF[i]) ? 'border-hijau bg-hijau-muda font-semibold' : 'border-border')}>
                     {HURUF[i]}. {o}
                   </li>
                 ))}
               </ul>
-              {s.pembahasan && <p className="mt-3 rounded-md bg-matahari-muda px-3 py-2"><b>Pembahasan:</b> {s.pembahasan}</p>}
+              {s.pembahasan && <p className="mt-3 rounded-md bg-kuning-muda px-3 py-2"><b>Pembahasan:</b> {s.pembahasan}</p>}
             </DialogBody>
           </>
         )}

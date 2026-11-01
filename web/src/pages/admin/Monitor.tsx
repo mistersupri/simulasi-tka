@@ -41,7 +41,7 @@ export default function Monitor() {
   return (
     <>
       <KepalaHalaman judul="Monitor ujian" keterangan="Diperbarui otomatis setiap 10 detik.">
-        <Button variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}><ArrowClockwise weight="bold" /> Perbarui</Button>
+        <Button variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}><ArrowClockwise /> Perbarui</Button>
       </KepalaHalaman>
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !q.data.sesi.length ? (
         <Kosong judul="Tidak ada siswa yang sedang mengerjakan ujian.">Siswa akan muncul di sini begitu menekan "Mulai ujian".</Kosong>
@@ -51,35 +51,35 @@ export default function Monitor() {
             const diam = Math.round((new Date(q.data.sekarang).getTime() - new Date(s.terakhirAktif).getTime()) / 1000);
             const rawan = s.jumlahPelanggaran > 0;
             return (
-              <li key={s.id} className={cn('rounded-xl bg-white p-4', rawan ? 'stiker' : 'border-2 border-border')}>
+              <li key={s.id} className={cn('rounded-lg border bg-white p-4', rawan ? 'border-merah/50' : 'border-garis')}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-extrabold">{s.nama}</p>
+                    <p className="truncate font-semibold">{s.nama}</p>
                     <p className="truncate text-sm text-muted-foreground">Kelas {s.kelas} · {s.namaUjian}</p>
                   </div>
-                  <span className="text-xl font-extrabold tabular-nums">{s.sisaDetik === null ? 'Bebas' : formatJam(s.sisaDetik)}</span>
+                  <span className="text-xl font-semibold tabular-nums">{s.sisaDetik === null ? 'Bebas' : formatJam(s.sisaDetik)}</span>
                 </div>
                 <Progress className="mt-3" value={(s.terjawab / Math.max(1, s.jumlahSoal)) * 100} />
                 <p className="mt-1.5 text-sm">{s.terjawab}/{s.jumlahSoal} dijawab{s.ragu ? ` · ${s.ragu} ragu` : ''}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Badge variant={diam > 120 ? 'matahari' : 'daun'}>Aktif {formatDurasi(diam)} lalu</Badge>
+                  <Badge variant={diam > 120 ? 'kuning' : 'hijau'}>Aktif {formatDurasi(diam)} lalu</Badge>
                   {rawan && (
-                    <Badge variant="bata">
+                    <Badge variant="merah">
                       {s.jumlahPelanggaran}{s.maksPelanggaran ? `/${s.maksPelanggaran}` : ''} pelanggaran
                     </Badge>
                   )}
                 </div>
                 {s.pelanggaranTerakhir && (
-                  <button type="button" onClick={() => setLihat(s)} className="mt-3 flex w-full items-center gap-3 rounded-md bg-bata-muda p-2 text-left text-sm hover:brightness-95">
+                  <button type="button" onClick={() => setLihat(s)} className="mt-3 flex w-full items-center gap-3 rounded-md bg-merah-muda p-2 text-left text-sm hover:brightness-95">
                     {s.pelanggaranTerakhir.foto
                       ? <img src={urlFoto(s.pelanggaranTerakhir.foto)} alt="Foto bukti pelanggaran terakhir" className="h-12 w-16 rounded object-cover" />
-                      : <Camera weight="bold" className="size-6 shrink-0 text-bata" />}
+                      : <Camera className="size-6 shrink-0 text-merah" />}
                     <span><b>Terakhir:</b> {LABEL_PELANGGARAN[s.pelanggaranTerakhir.jenis]}<br /><span className="text-muted-foreground">Lihat semua catatan</span></span>
                   </button>
                 )}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" disabled={s.sisaDetik === null} onClick={() => aksi.mutate({ id: s.id, aksi: 'TAMBAH_WAKTU', menit: 10 })}>Tambah 10 menit</Button>
-                  <Button size="sm" variant="daun" onClick={async () => {
+                  <Button size="sm" variant="hijau" onClick={async () => {
                     if (await konfirmasi({ judul: `Kirim ujian ${s.nama}?`, pesan: 'Ujian langsung dinilai memakai jawaban yang sudah tersimpan.', ya: 'Kirim sekarang' })) aksi.mutate({ id: s.id, aksi: 'KIRIM' });
                   }}>Kirim paksa</Button>
                   <Button size="sm" variant="destructive" onClick={async () => {
@@ -102,12 +102,12 @@ export function DaftarPelanggaran({ daftar }: { daftar: Pelanggaran[] }) {
   return (
     <ol className="space-y-3">
       {daftar.map((p) => (
-        <li key={p.id} className="flex gap-3 rounded-md border-2 border-border p-2">
+        <li key={p.id} className="flex gap-3 rounded-md border border-border p-2">
           {p.foto
             ? <a href={urlFoto(p.foto)} target="_blank" rel="noreferrer"><img src={urlFoto(p.foto)} alt="Foto bukti" className="h-20 w-28 rounded object-cover" /></a>
             : <div className="grid h-20 w-28 shrink-0 place-content-center rounded bg-muted text-xs text-muted-foreground">Tanpa foto</div>}
           <div className="text-sm">
-            <p className="font-extrabold">{LABEL_PELANGGARAN[p.jenis]}</p>
+            <p className="font-semibold">{LABEL_PELANGGARAN[p.jenis]}</p>
             <p className="text-muted-foreground">{formatTanggal(p.waktu)}</p>
             {p.detail && <p>{p.detail}</p>}
           </div>

@@ -1,60 +1,58 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '@fontsource-variable/nunito';
+@import '@fontsource-variable/source-sans-3';
 
 /* Token desain: lihat DESIGN.md untuk alasan tiap warna. */
 @theme inline {
-  --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
+  --font-sans: 'Source Sans 3 Variable', 'Segoe UI', system-ui, sans-serif;
 
-  --color-background: var(--kertas);
+  --color-background: var(--latar);
   --color-foreground: var(--tinta);
   --color-card: #ffffff;
   --color-card-foreground: var(--tinta);
   --color-popover: #ffffff;
   --color-popover-foreground: var(--tinta);
-  --color-primary: var(--jeruk);
+  --color-primary: var(--biru);
   --color-primary-foreground: #ffffff;
   --color-secondary: #ffffff;
   --color-secondary-foreground: var(--tinta);
-  --color-muted: #f4ece0;
-  --color-muted-foreground: #5b6475;
-  --color-accent: var(--jeruk-muda);
+  --color-muted: #eceff4;
+  --color-muted-foreground: #56616f;
+  --color-accent: var(--biru-muda);
   --color-accent-foreground: var(--tinta);
-  --color-destructive: var(--bata);
-  --color-border: #e6dccd;
-  --color-input: #cfc3b1;
-  --color-ring: var(--jeruk);
+  --color-destructive: var(--merah);
+  --color-border: var(--garis);
+  --color-input: #7a8699;
+  --color-ring: var(--biru);
 
   --color-tinta: var(--tinta);
-  --color-kertas: var(--kertas);
-  --color-jeruk: var(--jeruk);
-  --color-jeruk-tua: #9a3412;
-  --color-jeruk-muda: var(--jeruk-muda);
-  --color-daun: var(--daun);
-  --color-daun-muda: #e3f2e6;
-  --color-matahari: var(--matahari);
-  --color-matahari-muda: #fff3bf;
-  --color-bata: var(--bata);
-  --color-bata-muda: #fde4e1;
+  --color-latar: var(--latar);
+  --color-garis: var(--garis);
+  --color-biru: var(--biru);
+  --color-biru-tua: #16305c;
+  --color-biru-muda: #e6ecf5;
+  --color-biru-pucat: #c9d3e3;
+  --color-hijau: var(--hijau);
+  --color-hijau-muda: #e4f1e8;
+  --color-kuning: var(--kuning);
+  --color-kuning-muda: #fdf3d0;
+  --color-merah: var(--merah);
+  --color-merah-muda: #fce8e6;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-
-  /* Motif "stiker": bayangan padat tanpa blur sebagai penanda elevasi. */
-  --shadow-stiker: 4px 4px 0 0 var(--tinta);
-  --shadow-stiker-kecil: 2px 2px 0 0 var(--tinta);
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
 }
 
 :root {
-  --tinta: #1e2a3b;
-  --kertas: #fff8ec;
-  --jeruk: #c2410c;
-  --jeruk-muda: #ffe8d6;
-  --daun: #237032;
-  --matahari: #ffd43b;
-  --bata: #b42318;
+  --tinta: #1a2433;
+  --latar: #f3f5f8;
+  --garis: #d5dce5;
+  --biru: #1e3a6e;
+  --hijau: #1f6b3b;
+  --kuning: #f2b705;
+  --merah: #b42318;
 }
 
 @layer base {
@@ -66,25 +64,14 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-weight: 500;
   }
   h1, h2, h3 {
-    @apply font-extrabold tracking-tight;
+    @apply font-semibold tracking-tight;
   }
   :focus-visible {
-    outline: 3px solid var(--jeruk);
+    outline: 2px solid var(--biru);
     outline-offset: 2px;
   }
-}
-
-@utility stiker {
-  border: 2px solid var(--tinta);
-  box-shadow: var(--shadow-stiker);
-}
-
-@utility stiker-kecil {
-  border: 2px solid var(--tinta);
-  box-shadow: var(--shadow-stiker-kecil);
 }
 
 /* Area ujian: teks tidak bisa diblok/disalin (lihat useAntiContek). */

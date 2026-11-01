@@ -54,9 +54,9 @@ export default function HalamanHasil() {
         <Button variant="outline" disabled={!data.length} onClick={() => unduhCsv('hasil-ujian.csv', [
           ['Tanggal', 'NISN', 'Nama', 'Kelas', 'Ujian', 'Nilai', 'Benar', 'Salah', 'Kosong', 'Durasi (detik)', 'Pelanggaran', 'Status'],
           ...data.map((h) => [formatTanggal(h.tanggal), h.nisn, h.namaSiswa, h.kelas, h.namaUjian, h.nilai, h.benar, h.salah - h.kosong, h.kosong, h.durasiDetik, h.jumlahPelanggaran, LABEL_STATUS_HASIL[h.status].label]),
-        ])}><DownloadSimple weight="bold" /> CSV</Button>
+        ])}><DownloadSimple /> CSV</Button>
         <a className={buttonVariants()} href={`/api/admin/ekspor.xlsx${ujianId !== SEMUA ? `?ujianId=${ujianId}` : ''}`} download>
-          <FileXls weight="bold" /> Unduh Excel
+          <FileXls /> Unduh Excel
         </a>
       </KepalaHalaman>
 
@@ -71,14 +71,14 @@ export default function HalamanHasil() {
           <SelectContent><SelectItem value={SEMUA}>Semua kelas</SelectItem>{daftarKelas.map((k) => <SelectItem key={k} value={k}>Kelas {k}</SelectItem>)}</SelectContent>
         </Select>
         <Button variant="outline" disabled={ujianId === SEMUA} onClick={() => setAnalisis(ujianId)} title={ujianId === SEMUA ? 'Pilih satu ujian dulu' : undefined}>
-          <ChartBar weight="bold" /> Analisis butir
+          <ChartBar /> Analisis butir
         </Button>
       </div>
 
       <BilahPilihan jumlah={pilihan.dipilih.size}>
         <Button size="sm" variant="destructive" onClick={async () => {
           if (await konfirmasi({ judul: `Hapus ${pilihan.dipilih.size} hasil?`, pesan: 'Siswa tersebut dapat mengerjakan ujiannya lagi.', ya: 'Hapus', bahaya: true })) hapus.mutate();
-        }}><Trash weight="bold" /> Hapus agar bisa mengulang</Button>
+        }}><Trash /> Hapus agar bisa mengulang</Button>
       </BilahPilihan>
 
       {hasil.isPending ? <Memuat /> : hasil.error ? <Galat galat={hasil.error} ulangi={() => hasil.refetch()} /> : !data.length ? (
@@ -100,13 +100,13 @@ export default function HalamanHasil() {
                   <TableCell><b>{h.namaSiswa}</b><div className="text-xs text-muted-foreground">Kelas {h.kelas} · {formatTanggal(h.tanggal)}</div></TableCell>
                   <TableCell>{h.namaUjian}</TableCell>
                   <TableCell>
-                    <span className={cn('text-xl font-extrabold tabular-nums', kkm > 0 && (h.nilai >= kkm ? 'text-daun' : 'text-bata'))}>{h.nilai}</span>
+                    <span className={cn('text-xl font-semibold tabular-nums', kkm > 0 && (h.nilai >= kkm ? 'text-hijau' : 'text-merah'))}>{h.nilai}</span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">{h.benar} / {h.salah - h.kosong} / {h.kosong}</TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1">
                       <Badge variant={st.varian}>{st.label}</Badge>
-                      {h.jumlahPelanggaran > 0 && <Badge variant="bata">{h.jumlahPelanggaran} pelanggaran</Badge>}
+                      {h.jumlahPelanggaran > 0 && <Badge variant="merah">{h.jumlahPelanggaran} pelanggaran</Badge>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDetail(h.id)}>Detail</Button></TableCell>
@@ -138,7 +138,7 @@ function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutu
             <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
               <section>
                 <p className="text-sm text-muted-foreground">
-                  Nilai <b className={cn('text-lg', kkm > 0 && (q.data.hasil.nilai >= kkm ? 'text-daun' : 'text-bata'))}>{q.data.hasil.nilai}</b>
+                  Nilai <b className={cn('text-lg', kkm > 0 && (q.data.hasil.nilai >= kkm ? 'text-hijau' : 'text-merah'))}>{q.data.hasil.nilai}</b>
                   {' '}· waktu {formatDurasi(q.data.hasil.durasiDetik)}
                 </p>
                 <Table className="mt-3">
@@ -148,8 +148,8 @@ function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutu
                       <TableRow key={s.id}>
                         <TableCell>{s.nomor}</TableCell>
                         <TableCell><b>{s.id}</b><p className="line-clamp-1 text-xs text-muted-foreground">{s.pertanyaan}</p></TableCell>
-                        <TableCell><Badge variant={s.benar ? 'daun' : s.jawaban ? 'bata' : 'default'}>{s.jawaban || 'Kosong'}</Badge></TableCell>
-                        <TableCell className="font-bold">{s.kunci}</TableCell>
+                        <TableCell><Badge variant={s.benar ? 'hijau' : s.jawaban ? 'merah' : 'default'}>{s.jawaban || 'Kosong'}</Badge></TableCell>
+                        <TableCell className="font-semibold">{s.kunci}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -191,15 +191,15 @@ export function DialogAnalisis({ ujianId, tutup }: { ujianId: string | null; tut
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {[['Peserta', a.jumlahPeserta], ['Rata-rata', a.rataRata], ['Tertinggi', a.tertinggi], ['Terendah', a.terendah],
                   [`Tuntas (KKM ${a.kkm})`, a.tuntas === null ? '-' : `${a.tuntas}/${a.jumlahPeserta}`]].map(([l, v]) => (
-                  <div key={l as string} className="rounded-md bg-muted px-3 py-2"><dt className="text-xs font-bold text-muted-foreground">{l}</dt><dd className="text-2xl font-extrabold tabular-nums">{v}</dd></div>
+                  <div key={l as string} className="rounded-md bg-muted px-3 py-2"><dt className="text-xs font-semibold text-muted-foreground">{l}</dt><dd className="text-2xl font-semibold tabular-nums">{v}</dd></div>
                 ))}
               </dl>
               <h3 className="mt-6 text-base">Sebaran nilai</h3>
               <div className="mt-3 flex h-36 items-end gap-1.5" role="img" aria-label="Grafik sebaran nilai per rentang 10">
                 {a.sebaranNilai.map((n, i) => (
-                  <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1 text-[11px] font-bold">
+                  <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1 text-[11px] font-semibold">
                     <span>{n || ''}</span>
-                    <span className="w-full rounded-t-sm bg-jeruk" style={{ height: `${(n / maks) * 100}%`, minHeight: n ? 4 : 1 }} />
+                    <span className="w-full rounded-t-sm bg-biru" style={{ height: `${(n / maks) * 100}%`, minHeight: n ? 4 : 1 }} />
                     <span className="text-muted-foreground">{i * 10}</span>
                   </div>
                 ))}
@@ -212,12 +212,12 @@ export function DialogAnalisis({ ujianId, tutup }: { ujianId: string | null; tut
                   {a.butir.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell><b>{b.id}</b><p className="line-clamp-1 max-w-72 text-xs text-muted-foreground">{b.pertanyaan}</p></TableCell>
-                      <TableCell className="font-bold">{b.kunci}</TableCell>
+                      <TableCell className="font-semibold">{b.kunci}</TableCell>
                       <TableCell className="tabular-nums"><b>{b.p}%</b> <span className="text-xs text-muted-foreground">({b.benar}/{b.peserta})</span></TableCell>
-                      <TableCell><Badge variant={b.kategori === 'Mudah' ? 'daun' : b.kategori === 'Sedang' ? 'matahari' : 'bata'}>{b.kategori}</Badge></TableCell>
+                      <TableCell><Badge variant={b.kategori === 'Mudah' ? 'hijau' : b.kategori === 'Sedang' ? 'kuning' : 'merah'}>{b.kategori}</Badge></TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
                         {['A', 'B', 'C', 'D'].map((h, i) => (
-                          <span key={h}>{i > 0 && ' / '}<span className={b.kunci.includes(h) ? 'font-extrabold text-daun' : ''}>{b.sebaran[h]}</span></span>
+                          <span key={h}>{i > 0 && ' / '}<span className={b.kunci.includes(h) ? 'font-semibold text-hijau' : ''}>{b.sebaran[h]}</span></span>
                         ))}
                       </TableCell>
                     </TableRow>

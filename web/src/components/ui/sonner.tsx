@@ -6,9 +6,9 @@ function Toaster(props: ToasterProps) {
       position="bottom-center"
       toastOptions={{
         classNames: {
-          toast: '!rounded-md !border-2 !border-tinta !bg-white !text-tinta !shadow-[2px_2px_0_0_var(--tinta)] !font-sans !font-semibold',
-          error: '!bg-bata-muda',
-          success: '!bg-daun-muda',
+          toast: '!rounded-md !border !border-garis !bg-white !text-tinta !shadow-lg !font-sans !font-medium',
+          error: '!bg-merah-muda',
+          success: '!bg-hijau-muda',
         },
       }}
       {...props}

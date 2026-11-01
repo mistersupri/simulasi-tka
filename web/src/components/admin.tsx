@@ -18,7 +18,7 @@ export function KepalaHalaman({ judul, keterangan, children }: { judul: string; 
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-3xl">{judul}</h1>
+        <h1 className="text-2xl">{judul}</h1>
         {keterangan && <p className="mt-1 text-muted-foreground">{keterangan}</p>}
       </div>
       {children && <div className="flex flex-wrap gap-2">{children}</div>}
@@ -30,8 +30,8 @@ export function KepalaHalaman({ judul, keterangan, children }: { judul: string; 
 export function BilahPilihan({ jumlah, children }: { jumlah: number; children: ReactNode }) {
   if (!jumlah) return null;
   return (
-    <div className="stiker-kecil mb-3 flex flex-wrap items-center gap-2 rounded-md bg-matahari-muda px-3 py-2">
-      <span className="mr-2 font-extrabold">{jumlah} dipilih</span>
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md bg-kuning-muda px-3 py-2">
+      <span className="mr-2 font-semibold">{jumlah} dipilih</span>
       {children}
     </div>
   );
@@ -70,12 +70,12 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
       <DialogContent lebar>
         <DialogHeader>
           <DialogTitle>{judul}</DialogTitle>
-          <DialogDescription className="font-bold text-bata">Kata sandi hanya ditampilkan sekali ini. Cetak atau unduh sekarang.</DialogDescription>
+          <DialogDescription className="font-semibold text-merah">Kata sandi hanya ditampilkan sekali ini. Cetak atau unduh sekarang.</DialogDescription>
         </DialogHeader>
         <DialogBody>
           {!!ditolak?.length && (
-            <div role="alert" className="mb-4 rounded-md bg-bata-muda px-3 py-2 text-sm">
-              <p className="font-bold text-bata">{ditolak.length} baris dilewati:</p>
+            <div role="alert" className="mb-4 rounded-md bg-merah-muda px-3 py-2 text-sm">
+              <p className="font-semibold text-merah">{ditolak.length} baris dilewati:</p>
               <ul className="mt-1 list-disc pl-5">
                 {ditolak.map((d, i) => <li key={i}>Baris {d.nomor}{d.nama ? ` (${d.nama})` : ''}: {d.alasan}</li>)}
               </ul>
@@ -86,8 +86,8 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
             <TableBody>
               {akun?.map((a) => (
                 <TableRow key={a.username}>
-                  <TableCell className="font-bold">{a.nama}</TableCell><TableCell>{a.kelas}</TableCell>
-                  <TableCell><code>{a.username}</code></TableCell><TableCell><code className="text-base font-bold">{a.password}</code></TableCell>
+                  <TableCell className="font-semibold">{a.nama}</TableCell><TableCell>{a.kelas}</TableCell>
+                  <TableCell><code>{a.username}</code></TableCell><TableCell><code className="text-base font-semibold">{a.password}</code></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -95,23 +95,23 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => unduhCsv('akun.csv', [['Nama', 'Kelas', 'Username', 'Kata sandi'], ...(akun ?? []).map((a) => [a.nama, a.kelas, a.username, a.password])])}>
-            <DownloadSimple weight="bold" /> Unduh CSV
+            <DownloadSimple /> Unduh CSV
           </Button>
-          <Button onClick={cetak}><Printer weight="bold" /> Cetak kartu login</Button>
+          <Button onClick={cetak}><Printer /> Cetak kartu login</Button>
         </DialogFooter>
       </DialogContent>
       {akun?.length ? createPortal(
         <div className="area-cetak">
           <div className="grid grid-cols-2 gap-3">
             {akun.map((a) => (
-              <div key={a.username} className="break-inside-avoid rounded-lg border-2 border-dashed border-tinta p-3 text-sm">
-                <p className="font-extrabold">Kartu login Simulasi TKA</p>
+              <div key={a.username} className="break-inside-avoid rounded-lg border border-dashed border-garis p-3 text-sm">
+                <p className="font-semibold">Kartu login Simulasi TKA</p>
                 <p className="text-xs">{info?.namaSekolah}</p>
                 <table className="mt-2"><tbody>
-                  <tr><td className="pr-3">Nama</td><td className="font-bold">{a.nama}</td></tr>
+                  <tr><td className="pr-3">Nama</td><td className="font-semibold">{a.nama}</td></tr>
                   <tr><td className="pr-3">Kelas</td><td>{a.kelas}</td></tr>
-                  <tr><td className="pr-3">Username</td><td className="text-base font-extrabold">{a.username}</td></tr>
-                  <tr><td className="pr-3">Kata sandi</td><td className="text-base font-extrabold">{a.password}</td></tr>
+                  <tr><td className="pr-3">Username</td><td className="text-base font-semibold">{a.username}</td></tr>
+                  <tr><td className="pr-3">Kata sandi</td><td className="text-base font-semibold">{a.password}</td></tr>
                 </tbody></table>
                 <p className="mt-2 text-xs break-all">{window.location.origin}</p>
               </div>
@@ -152,16 +152,16 @@ export function DialogImpor({ buka, setBuka, judul, petunjuk, kolom, template, k
         <DialogBody className="space-y-3">
           <p className="text-sm">Urutan kolom: <b>{kolom.map((k) => k.header[0]).join(' · ')}</b>. Baris judul kolom boleh ikut ditempel.</p>
           <div className="flex flex-wrap gap-2">
-            <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border-2 border-tinta bg-white px-3 text-[13px] font-bold hover:bg-muted focus-within:outline-3 focus-within:outline-jeruk">
-              <UploadSimple weight="bold" className="size-4" /> Pilih berkas CSV
+            <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
+              <UploadSimple className="size-4" /> Pilih berkas CSV
               <input type="file" accept=".csv,.tsv,.txt" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setTeks(await f.text()); }} />
             </label>
-            <Button variant="outline" size="sm" onClick={() => unduhCsv('template.csv', template)}><DownloadSimple weight="bold" /> Unduh template</Button>
+            <Button variant="outline" size="sm" onClick={() => unduhCsv('template.csv', template)}><DownloadSimple /> Unduh template</Button>
           </div>
           <Textarea rows={8} value={teks} onChange={(e) => setTeks(e.target.value)} placeholder="Salin baris dari Excel atau Google Sheets, lalu tempel (Ctrl+V) di sini." aria-label="Data yang ditempel" />
           {baris.length > 0 && (
             <div>
-              <Badge variant="daun">{baris.length} baris terbaca</Badge>
+              <Badge variant="hijau">{baris.length} baris terbaca</Badge>
               <Table className="mt-2">
                 <TableHeader><TableRow>{kolom.slice(0, 5).map((k) => <TableHead key={k.kunci}>{k.header[0]}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>
@@ -172,7 +172,7 @@ export function DialogImpor({ buka, setBuka, judul, petunjuk, kolom, template, k
               </Table>
             </div>
           )}
-          {progres !== null && <p role="status" className="font-bold">Mengimpor... {progres}%</p>}
+          {progres !== null && <p role="status" className="font-semibold">Mengimpor... {progres}%</p>}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" disabled={progres !== null} onClick={() => setBuka(false)}>Batal</Button>
@@ -203,8 +203,8 @@ export function DialogDitolak({ ditolak, tutup }: { ditolak: Ditolak[] | null; t
 
 /** Teks status ujian/hasil yang konsisten di seluruh halaman admin. */
 export const LABEL_STATUS_HASIL = {
-  SELESAI: { label: 'Selesai', varian: 'daun' },
-  WAKTU_HABIS: { label: 'Waktu habis', varian: 'matahari' },
-  DIHENTIKAN: { label: 'Dihentikan pengawas', varian: 'jeruk' },
-  PELANGGARAN: { label: 'Pelanggaran', varian: 'bata' },
+  SELESAI: { label: 'Selesai', varian: 'hijau' },
+  WAKTU_HABIS: { label: 'Waktu habis', varian: 'kuning' },
+  DIHENTIKAN: { label: 'Dihentikan pengawas', varian: 'biru' },
+  PELANGGARAN: { label: 'Pelanggaran', varian: 'merah' },
 } as const;

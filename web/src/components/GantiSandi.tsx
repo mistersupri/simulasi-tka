@@ -35,7 +35,7 @@ export function GantiSandi({ jenis, buka, setBuka }: { jenis: 'siswa' | 'staf'; 
             <div className="space-y-1.5"><Label htmlFor="pw-lama">Kata sandi lama</Label><Input id="pw-lama" type="password" autoComplete="current-password" value={lama} onChange={(e) => setLama(e.target.value)} required /></div>
             <div className="space-y-1.5"><Label htmlFor="pw-baru">Kata sandi baru</Label><Input id="pw-baru" type="password" autoComplete="new-password" minLength={6} value={baru} onChange={(e) => setBaru(e.target.value)} required /><p className="text-xs text-muted-foreground">Minimal 6 karakter.</p></div>
             <div className="space-y-1.5"><Label htmlFor="pw-ulang">Ulangi kata sandi baru</Label><Input id="pw-ulang" type="password" autoComplete="new-password" value={ulang} onChange={(e) => setUlang(e.target.value)} required /></div>
-            {galat && <p role="alert" className="text-sm font-bold text-bata">{galat}</p>}
+            {galat && <p role="alert" className="text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setBuka(false)}>Batal</Button>

@@ -10,7 +10,7 @@ function AlertDialogContent({ className, ...props }: React.ComponentProps<typeof
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-tinta/50" />
       <AlertDialogPrimitive.Content
-        className={cn('stiker fixed top-1/2 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-5', className)}
+        className={cn('fixed top-1/2 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-garis bg-white p-5 shadow-xl', className)}
         {...props}
       />
     </AlertDialogPrimitive.Portal>
@@ -18,7 +18,7 @@ function AlertDialogContent({ className, ...props }: React.ComponentProps<typeof
 }
 
 const AlertDialogTitle = ({ className, ...p }: React.ComponentProps<typeof AlertDialogPrimitive.Title>) => (
-  <AlertDialogPrimitive.Title className={cn('text-lg font-extrabold', className)} {...p} />
+  <AlertDialogPrimitive.Title className={cn('text-lg font-bold', className)} {...p} />
 );
 const AlertDialogDescription = ({ className, ...p }: React.ComponentProps<typeof AlertDialogPrimitive.Description>) => (
   <AlertDialogPrimitive.Description className={cn('mt-2 text-sm whitespace-pre-line text-muted-foreground', className)} {...p} />

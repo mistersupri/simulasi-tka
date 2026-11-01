@@ -1,18 +1,36 @@
+import type { ReactNode } from 'react';
 import { useInfo } from '@/hooks/useProfil';
 import { cn } from '@/lib/utils';
 
 /** Identitas sekolah: logo unggahan bila ada, selain itu nama sekolah sebagai teks. */
-export function Merek({ className, kecil }: { className?: string; kecil?: boolean }) {
+export function Merek({ className, kecil, terang }: { className?: string; kecil?: boolean; terang?: boolean }) {
   const { data: info } = useInfo();
   return (
     <div className={cn('flex min-w-0 items-center gap-3', className)}>
       {info?.adaLogo && (
-        <img src="/api/logo" alt="" className={cn('shrink-0 rounded-md bg-white object-contain', kecil ? 'size-9' : 'size-12')} />
+        <img src="/api/logo" alt="" className={cn('shrink-0 rounded-sm bg-white object-contain p-0.5', kecil ? 'size-9' : 'size-11')} />
       )}
       <div className="min-w-0 leading-tight">
-        <div className={cn('truncate font-extrabold', kecil ? 'text-base' : 'text-lg')}>{info?.namaSekolah ?? 'Simulasi TKA'}</div>
-        <div className="truncate text-xs text-muted-foreground">Simulasi TKA · {info?.tahunAjaran ?? ''}</div>
+        <div className={cn('truncate font-semibold', kecil ? 'text-[15px]' : 'text-lg')}>{info?.namaSekolah ?? 'Simulasi TKA'}</div>
+        <div className={cn('truncate text-xs', terang ? 'text-biru-pucat' : 'text-muted-foreground')}>
+          Simulasi Tes Kemampuan Akademik{info?.tahunAjaran ? ` · Tahun Ajaran ${info.tahunAjaran}` : ''}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Bilah kepala resmi (motif identitas, lihat DESIGN.md): biru tua dengan nama sekolah,
+ * seperti kop surat. Dipakai di semua halaman siswa.
+ */
+export function BilahKepala({ children, className, lebar = 'max-w-5xl' }: { children?: ReactNode; className?: string; lebar?: string }) {
+  return (
+    <header className={cn('bg-biru text-white', className)}>
+      <div className={cn('mx-auto flex items-center justify-between gap-3 px-4 py-3', lebar)}>
+        <Merek kecil terang />
+        {children && <div className="flex shrink-0 items-center gap-1">{children}</div>}
+      </div>
+    </header>
   );
 }

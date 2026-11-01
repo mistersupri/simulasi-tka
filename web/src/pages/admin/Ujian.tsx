@@ -14,7 +14,6 @@ import { Switch } from '@/components/ui/switch';
 import { api, pesanGalat } from '@/lib/api';
 import { dariInputWaktu, formatTanggal, keInputWaktu } from '@/lib/format';
 import type { Ujian } from '@/lib/tipe';
-import { cn } from '@/lib/utils';
 import { DialogAnalisis } from './Hasil';
 
 type Data = { ujian: Ujian[]; daftarMapel: string[]; aplikasiTersedia: boolean };
@@ -22,9 +21,9 @@ type Data = { ujian: Ujian[]; daftarMapel: string[]; aplikasiTersedia: boolean }
 function statusJadwal(u: Ujian) {
   const sekarang = Date.now();
   if (!u.aktif) return { label: 'Nonaktif', varian: 'default' as const };
-  if (u.waktuMulai && sekarang < new Date(u.waktuMulai).getTime()) return { label: 'Terjadwal', varian: 'jeruk' as const };
-  if (u.waktuSelesai && sekarang > new Date(u.waktuSelesai).getTime()) return { label: 'Sudah ditutup', varian: 'bata' as const };
-  return { label: 'Dibuka', varian: 'daun' as const };
+  if (u.waktuMulai && sekarang < new Date(u.waktuMulai).getTime()) return { label: 'Terjadwal', varian: 'biru' as const };
+  if (u.waktuSelesai && sekarang > new Date(u.waktuSelesai).getTime()) return { label: 'Sudah ditutup', varian: 'merah' as const };
+  return { label: 'Dibuka', varian: 'hijau' as const };
 }
 
 export default function HalamanUjian() {
@@ -49,7 +48,7 @@ export default function HalamanUjian() {
   return (
     <>
       <KepalaHalaman judul="Jadwal ujian" keterangan="Atur kapan ujian dibuka, tokennya, dan cara pengawasannya.">
-        <Button onClick={() => setForm('baru')}><Plus weight="bold" /> Buat ujian</Button>
+        <Button onClick={() => setForm('baru')}><Plus /> Buat ujian</Button>
       </KepalaHalaman>
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !q.data.ujian.length ? (
         <Kosong judul="Belum ada ujian.">Buat ujian pertama, lalu bagikan tokennya saat hari ujian.</Kosong>
@@ -59,7 +58,7 @@ export default function HalamanUjian() {
             const s = statusJadwal(u);
             const kekurangan = Object.entries(u.soalPerKelas).filter(([, n]) => n === 0 || (u.jumlahSoal > 0 && n < u.jumlahSoal));
             return (
-              <li key={u.id} className={cn('flex flex-col rounded-xl bg-white p-5', s.label === 'Dibuka' ? 'stiker' : 'border-2 border-border')}>
+              <li key={u.id} className="flex flex-col rounded-lg border border-garis bg-white p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Badge variant={s.varian}>{s.label}</Badge>
@@ -67,35 +66,35 @@ export default function HalamanUjian() {
                     <p className="text-sm text-muted-foreground">{u.mataPelajaran} · {u.kelas.length ? `Kelas ${u.kelas.join(', ')}` : 'Semua kelas'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-bold text-muted-foreground">Token</p>
-                    <p className="text-lg font-extrabold tracking-widest">{u.token ?? 'Tanpa'}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">Token</p>
+                    <p className="text-lg font-semibold tracking-widest">{u.token ?? 'Tanpa'}</p>
                   </div>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  <dt className="text-muted-foreground">Waktu</dt><dd className="font-bold">{u.durasiMenit ? `${u.durasiMenit} menit` : 'Tanpa batas'}</dd>
-                  <dt className="text-muted-foreground">Soal</dt><dd className="font-bold">{u.jumlahSoal ? `${u.jumlahSoal} diambil acak` : 'Semua soal'}</dd>
+                  <dt className="text-muted-foreground">Waktu</dt><dd className="font-semibold">{u.durasiMenit ? `${u.durasiMenit} menit` : 'Tanpa batas'}</dd>
+                  <dt className="text-muted-foreground">Soal</dt><dd className="font-semibold">{u.jumlahSoal ? `${u.jumlahSoal} diambil acak` : 'Semua soal'}</dd>
                   <dt className="text-muted-foreground">Jadwal</dt>
-                  <dd className="font-bold">{u.waktuMulai || u.waktuSelesai ? `${formatTanggal(u.waktuMulai)} sampai ${formatTanggal(u.waktuSelesai)}` : 'Kapan saja'}</dd>
-                  <dt className="text-muted-foreground">Sudah mengerjakan</dt><dd className="font-bold">{u.jumlahPeserta} siswa</dd>
+                  <dd className="font-semibold">{u.waktuMulai || u.waktuSelesai ? `${formatTanggal(u.waktuMulai)} sampai ${formatTanggal(u.waktuSelesai)}` : 'Kapan saja'}</dd>
+                  <dt className="text-muted-foreground">Sudah mengerjakan</dt><dd className="font-semibold">{u.jumlahPeserta} siswa</dd>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {u.wajibLayarPenuh && <Badge><ArrowsOut weight="bold" /> Layar penuh</Badge>}
-                  {u.wajibKamera && <Badge><Camera weight="bold" /> Kamera</Badge>}
-                  {u.wajibAplikasi && <Badge><Desktop weight="bold" /> Hanya aplikasi Windows</Badge>}
+                  {u.wajibLayarPenuh && <Badge><ArrowsOut /> Layar penuh</Badge>}
+                  {u.wajibKamera && <Badge><Camera /> Kamera</Badge>}
+                  {u.wajibAplikasi && <Badge><Desktop /> Hanya aplikasi Windows</Badge>}
                   {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
                 {kekurangan.length > 0 && (
-                  <p className="mt-3 rounded-md bg-bata-muda px-3 py-2 text-sm font-bold text-bata">
+                  <p className="mt-3 rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">
                     Soal kurang: {kekurangan.map(([k, n]) => `kelas ${k} hanya ${n}`).join(', ')}.
                   </p>
                 )}
                 <div className="mt-4 flex flex-1 flex-wrap items-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple weight="bold" /> Ubah</Button>
-                  <Button size="sm" variant="outline" onClick={() => setAnalisis(u.id)}><ChartBar weight="bold" /> Analisis</Button>
-                  <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise weight="bold" /> Token baru</Button>
-                  <Button size="sm" variant="ghost" className="ml-auto text-bata" aria-label={`Hapus ${u.nama}`} onClick={async () => {
+                  <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple /> Ubah</Button>
+                  <Button size="sm" variant="outline" onClick={() => setAnalisis(u.id)}><ChartBar /> Analisis</Button>
+                  <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise /> Token baru</Button>
+                  <Button size="sm" variant="ghost" className="ml-auto text-merah" aria-label={`Hapus ${u.nama}`} onClick={async () => {
                     if (await konfirmasi({ judul: `Hapus "${u.nama}"?`, pesan: 'Jadwal dihapus. Hasil ujian yang sudah masuk tetap tersimpan.', ya: 'Hapus', bahaya: true })) hapus.mutate(u.id);
-                  }}><Trash weight="bold" /></Button>
+                  }}><Trash /></Button>
                 </div>
               </li>
             );
@@ -183,7 +182,7 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
               </div>
             </section>
 
-            <section className="rounded-lg border-2 border-tinta bg-kertas p-4">
+            <section className="rounded-lg border border-garis bg-latar p-4">
               <h3 className="text-base">Pengawasan</h3>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <Saklar id="u-penuh" label="Wajib layar penuh" ket="Keluar layar penuh atau pindah aplikasi dicatat; soal disembunyikan sampai kembali." checked={d.wajibLayarPenuh} ubah={(v) => ubah('wajibLayarPenuh', v)} />
@@ -208,7 +207,7 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
               <Saklar id="u-bahas" label="Tampilkan kunci & pembahasan" ket="Cocok untuk latihan, jangan untuk ujian resmi." checked={d.tampilkanPembahasan} ubah={(v) => ubah('tampilkanPembahasan', v)} />
               <Saklar id="u-aktif" label="Aktif (terlihat oleh siswa)" checked={d.aktif} ubah={(v) => ubah('aktif', v)} />
             </section>
-            {galat && <p role="alert" className="rounded-md bg-bata-muda px-3 py-2 text-sm font-bold text-bata">{galat}</p>}
+            {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={tutup}>Batal</Button>

@@ -88,10 +88,10 @@ export default function HalamanPengaturan() {
           <Card>
             <CardTitle>Logo sekolah</CardTitle>
             <CardDescription>Tampil di halaman login dan kartu ujian. Tanpa logo, nama sekolah dipakai sebagai teks.</CardDescription>
-            {q.data.adaLogo && <img src={`/api/logo?v=${versiLogo}`} alt="Logo sekolah" className="mt-3 size-24 rounded-md border-2 border-border object-contain" />}
+            {q.data.adaLogo && <img src={`/api/logo?v=${versiLogo}`} alt="Logo sekolah" className="mt-3 size-24 rounded-md border border-border object-contain" />}
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'cursor-pointer focus-within:outline-3 focus-within:outline-jeruk' })}>
-                <UploadSimple weight="bold" /> {logo.isPending ? 'Mengunggah...' : q.data.adaLogo ? 'Ganti logo' : 'Unggah logo'}
+              <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'cursor-pointer focus-within:outline-3 focus-within:outline-biru' })}>
+                <UploadSimple /> {logo.isPending ? 'Mengunggah...' : q.data.adaLogo ? 'Ganti logo' : 'Unggah logo'}
                 <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) logo.mutate(f); e.target.value = ''; }} />
               </label>
               {q.data.adaLogo && <Button size="sm" variant="ghost" onClick={() => hapusLogo.mutate()}>Hapus logo</Button>}
@@ -104,15 +104,15 @@ export default function HalamanPengaturan() {
               Unduh spreadsheet lama sebagai .xlsx (File, Download, Microsoft Excel), lalu unggah di sini.
               Siswa tetap bisa login dengan kata sandi lama.
             </CardDescription>
-            <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3 cursor-pointer focus-within:outline-3 focus-within:outline-jeruk' })}>
-              <FileXls weight="bold" /> {impor.isPending ? 'Mengimpor...' : 'Pilih berkas .xlsx'}
+            <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3 cursor-pointer focus-within:outline-3 focus-within:outline-biru' })}>
+              <FileXls /> {impor.isPending ? 'Mengimpor...' : 'Pilih berkas .xlsx'}
               <input type="file" accept=".xlsx" className="sr-only" disabled={impor.isPending} onChange={(e) => { const f = e.target.files?.[0]; if (f) impor.mutate(f); e.target.value = ''; }} />
             </label>
             {laporan && (
-              <div role="status" className="mt-3 rounded-md bg-daun-muda p-3 text-sm">
-                <p className="font-bold">Berhasil: {laporan.siswa} siswa, {laporan.soal} soal, {laporan.ujian} ujian.</p>
+              <div role="status" className="mt-3 rounded-md bg-hijau-muda p-3 text-sm">
+                <p className="font-semibold">Berhasil: {laporan.siswa} siswa, {laporan.soal} soal, {laporan.ujian} ujian.</p>
                 {laporan.dilewati.length > 0 && (
-                  <ul className="mt-2 list-disc pl-5 text-bata">
+                  <ul className="mt-2 list-disc pl-5 text-merah">
                     {laporan.dilewati.slice(0, 20).map((x, i) => <li key={i}>{x.lembar} baris {x.baris}: {x.alasan}</li>)}
                   </ul>
                 )}
@@ -123,7 +123,7 @@ export default function HalamanPengaturan() {
           <Card>
             <CardTitle>Cadangan data</CardTitle>
             <CardDescription>Unduh seluruh data (siswa, soal, ujian, hasil) sebagai berkas JSON. Simpan di tempat aman; berisi hash kata sandi.</CardDescription>
-            <a href="/api/admin/backup.json" download className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3' })}><DownloadSimple weight="bold" /> Unduh cadangan</a>
+            <a href="/api/admin/backup.json" download className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3' })}><DownloadSimple /> Unduh cadangan</a>
           </Card>
         </div>
       </div>

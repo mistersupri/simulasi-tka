@@ -74,9 +74,9 @@ export default function HalamanSiswa() {
       <KepalaHalaman judul="Data siswa" keterangan={q.data ? `${semua.length} siswa terdaftar` : undefined}>
         <Button variant="outline" disabled={!semua.length} onClick={() => unduhCsv('data-siswa.csv', [
           ['NISN', 'NAMA_SISWA', 'KELAS', 'USERNAME', 'STATUS'], ...semua.map((s) => [s.nisn, s.nama, s.kelas, s.username, s.aktif ? 'AKTIF' : 'NONAKTIF']),
-        ])}><DownloadSimple weight="bold" /> Unduh</Button>
-        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple weight="bold" /> Impor</Button>
-        <Button onClick={() => setForm('baru')}><Plus weight="bold" /> Tambah siswa</Button>
+        ])}><DownloadSimple /> Unduh</Button>
+        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple /> Impor</Button>
+        <Button onClick={() => setForm('baru')}><Plus /> Tambah siswa</Button>
       </KepalaHalaman>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-[2fr_1fr]">
@@ -90,12 +90,12 @@ export default function HalamanSiswa() {
       <BilahPilihan jumlah={pilihan.dipilih.size}>
         <Button size="sm" disabled={reset.isPending} onClick={async () => {
           if (await konfirmasi({ judul: 'Buat kata sandi baru?', pesan: `${pilihan.dipilih.size} siswa akan mendapat kata sandi baru secara acak. Kata sandi lama tidak berlaku lagi.`, ya: 'Buat kata sandi baru' })) reset.mutate(pilihan.ids);
-        }}><Key weight="bold" /> {reset.isPending ? 'Memproses...' : 'Reset sandi & cetak kartu'}</Button>
+        }}><Key /> {reset.isPending ? 'Memproses...' : 'Reset sandi & cetak kartu'}</Button>
         <Button size="sm" variant="outline" onClick={() => status.mutate(true)}>Aktifkan</Button>
         <Button size="sm" variant="outline" onClick={() => status.mutate(false)}>Nonaktifkan</Button>
         <Button size="sm" variant="destructive" onClick={async () => {
           if (await konfirmasi({ judul: `Hapus ${pilihan.dipilih.size} siswa?`, pesan: 'Akun dihapus. Hasil ujian mereka tetap tersimpan.', ya: 'Hapus', bahaya: true })) hapus.mutate();
-        }}><Trash weight="bold" /> Hapus</Button>
+        }}><Trash /> Hapus</Button>
       </BilahPilihan>
 
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !data.length ? (
@@ -115,9 +115,9 @@ export default function HalamanSiswa() {
                 <TableCell><b>{s.nama}</b>{s.nisn && <div className="text-xs text-muted-foreground">NISN {s.nisn}</div>}</TableCell>
                 <TableCell>{s.kelas}</TableCell>
                 <TableCell><code>{s.username}</code></TableCell>
-                <TableCell><Badge variant={s.aktif ? 'daun' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
+                <TableCell><Badge variant={s.aktif ? 'hijau' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
                 <TableCell className="text-sm text-muted-foreground">{formatTanggal(s.loginTerakhir)}</TableCell>
-                <TableCell className="text-right"><Button size="icon-sm" variant="ghost" aria-label={`Ubah ${s.nama}`} onClick={() => setForm(s)}><PencilSimple weight="bold" /></Button></TableCell>
+                <TableCell className="text-right"><Button size="icon-sm" variant="ghost" aria-label={`Ubah ${s.nama}`} onClick={() => setForm(s)}><PencilSimple /></Button></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -181,7 +181,7 @@ function FormSiswa({ siswa, tutup, akunBaru }: { siswa: Siswa | null; tutup: () 
             <div className="space-y-1.5"><Label htmlFor="m-user">Username</Label><Input id="m-user" autoCapitalize="none" value={d.username} disabled={!!siswa} placeholder="Otomatis dari nama" onChange={(e) => setD({ ...d, username: e.target.value })} /></div>
             <div className="space-y-1.5"><Label htmlFor="m-pass">{siswa ? 'Kata sandi baru' : 'Kata sandi'}</Label><Input id="m-pass" value={d.password} onChange={(e) => setD({ ...d, password: e.target.value })} placeholder={siswa ? 'Kosongkan bila tidak diganti' : 'Kosongkan untuk dibuat otomatis'} /></div>
             <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => setD({ ...d, aktif: v })} /> Akun aktif</Label>
-            {galat && <p role="alert" className="rounded-md bg-bata-muda px-3 py-2 text-sm font-bold text-bata">{galat}</p>}
+            {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={tutup}>Batal</Button>

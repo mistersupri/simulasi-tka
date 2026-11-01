@@ -32,7 +32,7 @@ export default function HalamanPengguna() {
   return (
     <>
       <KepalaHalaman judul="Guru & admin" keterangan="Guru: bank soal, jadwal, monitor, dan hasil. Admin: semua menu.">
-        <Button onClick={() => setForm('baru')}><Plus weight="bold" /> Tambah pengguna</Button>
+        <Button onClick={() => setForm('baru')}><Plus /> Tambah pengguna</Button>
       </KepalaHalaman>
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : (
         <Table>
@@ -40,18 +40,18 @@ export default function HalamanPengguna() {
           <TableBody>
             {q.data.map((p) => (
               <TableRow key={p.id}>
-                <TableCell><b>{p.nama}</b>{p.id === saya.id && <Badge variant="jeruk" className="ml-2">Anda</Badge>}</TableCell>
+                <TableCell><b>{p.nama}</b>{p.id === saya.id && <Badge variant="biru" className="ml-2">Anda</Badge>}</TableCell>
                 <TableCell><code>{p.username}</code></TableCell>
                 <TableCell>{p.peran === 'ADMIN' ? 'Admin' : 'Guru'}</TableCell>
-                <TableCell><Badge variant={p.aktif ? 'daun' : 'default'}>{p.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
+                <TableCell><Badge variant={p.aktif ? 'hijau' : 'default'}>{p.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
                 <TableCell className="text-sm text-muted-foreground">{formatTanggal(p.loginTerakhir)}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
-                    <Button size="icon-sm" variant="ghost" aria-label={`Ubah ${p.nama}`} onClick={() => setForm(p)}><PencilSimple weight="bold" /></Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Ubah ${p.nama}`} onClick={() => setForm(p)}><PencilSimple /></Button>
                     {p.id !== saya.id && (
-                      <Button size="icon-sm" variant="ghost" className="text-bata" aria-label={`Hapus ${p.nama}`} onClick={async () => {
+                      <Button size="icon-sm" variant="ghost" className="text-merah" aria-label={`Hapus ${p.nama}`} onClick={async () => {
                         if (await konfirmasi({ judul: `Hapus ${p.nama}?`, pesan: 'Akun ini tidak bisa login lagi.', ya: 'Hapus', bahaya: true })) hapus.mutate(p.id);
-                      }}><Trash weight="bold" /></Button>
+                      }}><Trash /></Button>
                     )}
                   </div>
                 </TableCell>
@@ -100,7 +100,7 @@ function FormPengguna({ pengguna, tutup, akunBaru }: { pengguna: Pengguna | null
             </div>
             <div className="space-y-1.5"><Label htmlFor="g-pass">{pengguna ? 'Kata sandi baru' : 'Kata sandi'}</Label><Input id="g-pass" value={d.password} onChange={(e) => setD({ ...d, password: e.target.value })} placeholder={pengguna ? 'Kosongkan bila tidak diganti' : 'Kosongkan untuk dibuat otomatis'} /></div>
             <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => setD({ ...d, aktif: v })} /> Akun aktif</Label>
-            {galat && <p role="alert" className="rounded-md bg-bata-muda px-3 py-2 text-sm font-bold text-bata">{galat}</p>}
+            {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={tutup}>Batal</Button>

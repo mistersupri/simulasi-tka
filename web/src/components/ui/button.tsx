@@ -3,25 +3,28 @@ import { Slot } from 'radix-ui';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-// Tombol utama memakai motif stiker: tepi tinta + bayangan padat yang "turun" saat ditekan.
+// Tombol datar dengan sudut kecil; warna menandai tingkat aksi (utama, positif, peringatan, bahaya).
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-bold whitespace-nowrap transition-[transform,box-shadow,background-color] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
   {
     variants: {
       variant: {
-        default: 'stiker-kecil bg-primary text-primary-foreground hover:bg-jeruk-tua active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
-        daun: 'stiker-kecil bg-daun text-white hover:brightness-95 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
-        matahari: 'stiker-kecil bg-matahari text-tinta hover:brightness-95 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
-        destructive: 'stiker-kecil bg-destructive text-white hover:brightness-95 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
-        outline: 'border-2 border-tinta bg-white text-tinta hover:bg-muted',
+        default: 'bg-primary text-primary-foreground hover:bg-biru-tua',
+        hijau: 'bg-hijau text-white hover:brightness-110',
+        kuning: 'bg-kuning text-tinta hover:brightness-95',
+        destructive: 'bg-destructive text-white hover:brightness-110',
+        outline: 'border border-input bg-white text-tinta hover:bg-muted',
         ghost: 'text-tinta hover:bg-muted',
-        link: 'text-jeruk underline-offset-4 hover:underline',
+        link: 'text-biru underline-offset-4 hover:underline',
+        // Untuk tombol di atas bilah kepala biru tua; garis fokus putih agar tetap terlihat.
+        kepala: 'text-white hover:bg-white/10 focus-visible:outline-white',
+        kepalaGaris: 'border border-white/60 text-white hover:bg-white/10 focus-visible:outline-white',
       },
       size: {
-        default: 'h-11 px-4',
+        default: 'h-10 px-4',
         sm: 'h-9 px-3 text-[13px]',
-        lg: 'h-13 px-6 text-base',
-        icon: 'size-11',
+        lg: 'h-11 px-5 text-[15px]',
+        icon: 'size-10',
         'icon-sm': 'size-9',
       },
     },

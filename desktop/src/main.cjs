@@ -137,7 +137,7 @@ function mintaKeluar() {
       maximizable: false,
       frame: false,
       alwaysOnTop: true,
-      backgroundColor: '#FFF8EC',
+      backgroundColor: '#F3F5F8',
       webPreferences: { preload: path.join(__dirname, 'preload-lokal.cjs'), contextIsolation: true, sandbox: true, devTools: DEBUG },
     });
     jendelaKeluar.setAlwaysOnTop(true, 'screen-saver', 1);
@@ -201,7 +201,7 @@ function buatJendela() {
     height: 800,
     frame: DEBUG,
     autoHideMenuBar: true,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F3F5F8',
     title: 'Ujian TKA',
     show: false,
     webPreferences: {

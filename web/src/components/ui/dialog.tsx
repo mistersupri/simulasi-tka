@@ -13,7 +13,7 @@ function DialogContent({ className, children, lebar, ...props }: React.Component
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-tinta/50 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
       <DialogPrimitive.Content
         className={cn(
-          'stiker fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg bg-white outline-none',
+          'fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-garis bg-white shadow-xl outline-none',
           lebar ? 'max-w-4xl' : 'max-w-lg',
           className,
         )}
@@ -21,20 +21,20 @@ function DialogContent({ className, children, lebar, ...props }: React.Component
       >
         {children}
         <DialogPrimitive.Close className="absolute top-3 right-3 rounded-md p-2 text-tinta hover:bg-muted" aria-label="Tutup">
-          <X weight="bold" className="size-5" />
+          <X className="size-5" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );
 }
 
-const DialogHeader = ({ className, ...p }: React.ComponentProps<'div'>) => <div className={cn('border-b-2 border-border px-5 py-4 pr-14', className)} {...p} />;
+const DialogHeader = ({ className, ...p }: React.ComponentProps<'div'>) => <div className={cn('border-b border-border px-5 py-4 pr-14', className)} {...p} />;
 const DialogBody = ({ className, ...p }: React.ComponentProps<'div'>) => <div className={cn('overflow-y-auto px-5 py-4', className)} {...p} />;
 const DialogFooter = ({ className, ...p }: React.ComponentProps<'div'>) => (
-  <div className={cn('flex flex-col-reverse gap-2 border-t-2 border-border px-5 py-3 sm:flex-row sm:justify-end', className)} {...p} />
+  <div className={cn('flex flex-col-reverse gap-2 border-t border-border px-5 py-3 sm:flex-row sm:justify-end', className)} {...p} />
 );
 const DialogTitle = ({ className, ...p }: React.ComponentProps<typeof DialogPrimitive.Title>) => (
-  <DialogPrimitive.Title className={cn('text-lg font-extrabold', className)} {...p} />
+  <DialogPrimitive.Title className={cn('text-lg font-bold', className)} {...p} />
 );
 const DialogDescription = ({ className, ...p }: React.ComponentProps<typeof DialogPrimitive.Description>) => (
   <DialogPrimitive.Description className={cn('mt-1 text-sm text-muted-foreground', className)} {...p} />

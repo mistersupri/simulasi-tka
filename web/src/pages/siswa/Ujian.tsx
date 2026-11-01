@@ -101,7 +101,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     mutationFn: () => api.post<HasilSiswa>(`/siswa/sesi/${paket.sesiId}/kirim`, { jawaban: jawabanRef.current, ragu: raguRef.current }),
     onSuccess: akhiri,
     onError: (err) => {
-      if (!tanganiGalatSesi(err)) toast.error(`${pesanGalat(err)} Jawabanmu aman di perangkat ini, coba kirim lagi.`);
+      if (!tanganiGalatSesi(err)) toast.error(`${pesanGalat(err)} Jawaban Anda tersimpan di perangkat ini. Silakan kirim ulang.`);
     },
   });
 
@@ -109,7 +109,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     const kosong = paket.soal.length - terjawab;
     const pesan = [
       kosong ? `Masih ada ${kosong} dari ${paket.soal.length} soal yang belum dijawab.` : 'Semua soal sudah dijawab.',
-      ragu.length ? `Ada ${ragu.length} soal yang kamu tandai ragu-ragu.` : '',
+      ragu.length ? `Ada ${ragu.length} soal yang Anda tandai ragu-ragu.` : '',
       'Setelah dikirim, jawaban tidak bisa diubah lagi.',
     ].filter(Boolean).join('\n');
     if (await konfirmasi({ judul: 'Kirim jawaban sekarang?', pesan, ya: 'Ya, kirim' })) kirim.mutate();
@@ -124,11 +124,11 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
       setSisa(s);
       if (s <= 300 && !sudahDiingatkan) {
         sudahDiingatkan = true;
-        toast.warning('Sisa waktu 5 menit. Periksa lagi jawabanmu.');
+        toast.warning('Sisa waktu 5 menit. Periksa kembali jawaban Anda.');
       }
       if (s <= 0 && !kirim.isPending) {
         window.clearInterval(id);
-        toast.info('Waktu habis. Jawabanmu dikirim otomatis.');
+        toast.info('Waktu habis. Jawaban Anda dikirim otomatis.');
         kirim.mutate();
       }
     };
@@ -202,7 +202,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
       const r = await api.post<{ jumlah: number; maks: number; dihentikan: boolean; hasil?: HasilSiswa }>(`/siswa/sesi/${paket.sesiId}/pelanggaran`, form);
       setJumlahPelanggaran(r.jumlah);
       if (r.dihentikan && r.hasil) {
-        toast.error('Batas pelanggaran tercapai. Ujianmu dikirim otomatis.');
+        toast.error('Batas pelanggaran tercapai. Ujian Anda dikirim otomatis.');
         akhiri(r.hasil);
       } else {
         setPeringatan({ jenis, jumlah: r.jumlah, maks: r.maks });
@@ -237,33 +237,33 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
 
   return (
     <div className="tanpa-blok min-h-dvh" style={{ '--ukuran-soal': `${ukuranHuruf}px` } as React.CSSProperties}>
-      <header className="sticky top-0 z-30 border-b-2 border-tinta bg-white">
+      <header className="sticky top-0 z-30 bg-biru text-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2 sm:px-4">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base sm:text-lg">{paket.ujian.nama}</h1>
-            <p className="line-clamp-2 text-xs text-muted-foreground">
+            <p className="line-clamp-2 text-xs text-biru-pucat">
               {paket.ujian.mataPelajaran} · {terjawab}/{paket.soal.length} dijawab
               {paket.ujian.maksPelanggaran > 0 && jumlahPelanggaran > 0 && (
-                <span className="font-bold text-bata"> · Pelanggaran {jumlahPelanggaran}/{paket.ujian.maksPelanggaran}</span>
+                <span className="font-semibold text-kuning"> · Pelanggaran {jumlahPelanggaran}/{paket.ujian.maksPelanggaran}</span>
               )}
             </p>
           </div>
           <div className="hidden items-center sm:flex" role="group" aria-label="Ukuran huruf">
-            <Button variant="ghost" size="icon-sm" aria-label="Perkecil huruf" onClick={() => setUkuranHuruf((u) => Math.max(14, u - 2))}><Minus weight="bold" /></Button>
-            <span className="w-6 text-center text-xs font-bold" aria-hidden>Aa</span>
-            <Button variant="ghost" size="icon-sm" aria-label="Perbesar huruf" onClick={() => setUkuranHuruf((u) => Math.min(28, u + 2))}><Plus weight="bold" /></Button>
+            <Button variant="kepala" size="icon-sm" aria-label="Perkecil huruf" onClick={() => setUkuranHuruf((u) => Math.max(14, u - 2))}><Minus /></Button>
+            <span className="w-6 text-center text-xs font-semibold" aria-hidden>Aa</span>
+            <Button variant="kepala" size="icon-sm" aria-label="Perbesar huruf" onClick={() => setUkuranHuruf((u) => Math.min(28, u + 2))}><Plus /></Button>
           </div>
           {paket.ujian.wajibKamera && <PratinjauKamera videoRef={kamera.videoRef} status={kamera.status} jumlahWajah={kamera.jumlahWajah} />}
           <div
             role="timer"
             aria-label="Sisa waktu"
-            className={cn('stiker-kecil rounded-md px-3 py-1.5 text-xl font-extrabold tabular-nums sm:text-2xl',
-              sisa !== null && sisa <= 300 ? 'animate-pulse bg-matahari' : 'bg-white')}
+            className={cn('rounded-md px-3 py-1 text-lg font-semibold tabular-nums text-tinta sm:text-xl',
+              sisa !== null && sisa <= 300 ? 'animate-pulse bg-kuning' : 'bg-white')}
           >
             {sisa === null ? 'Bebas' : formatJam(sisa)}
           </div>
-          <Button variant="outline" size="icon" className="lg:hidden" aria-label="Daftar nomor soal" aria-expanded={panelTerbuka} onClick={() => setPanelTerbuka((b) => !b)}>
-            <GridFour weight="bold" />
+          <Button variant="kepalaGaris" size="icon" className="lg:hidden" aria-label="Daftar nomor soal" aria-expanded={panelTerbuka} onClick={() => setPanelTerbuka((b) => !b)}>
+            <GridFour />
           </Button>
         </div>
       </header>
@@ -278,10 +278,10 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
               maks={paket.ujian.maksPelanggaran}
             />
           ) : (
-            <section className="rounded-xl border-2 border-tinta bg-white p-5 sm:p-7" aria-labelledby="nomor-soal">
+            <section className="rounded-lg border border-garis bg-white p-5 sm:p-7" aria-labelledby="nomor-soal">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id="nomor-soal" className="rounded-md bg-tinta px-3 py-1 text-base text-white">Soal {indeks + 1}</h2>
-                {soal.tipe === 'PGK' && <span className="rounded-md bg-jeruk-muda px-3 py-1 text-sm font-bold text-jeruk-tua">Pilih lebih dari satu jawaban</span>}
+                <h2 id="nomor-soal" className="rounded-sm bg-biru px-3 py-1 text-[15px] text-white">Soal nomor {indeks + 1}</h2>
+                {soal.tipe === 'PGK' && <span className="rounded-sm bg-biru-muda px-3 py-1 text-sm font-medium text-biru-tua">Pilih lebih dari satu jawaban</span>}
               </div>
               <p className="mt-4 leading-relaxed whitespace-pre-line" style={{ fontSize: 'var(--ukuran-soal)' }}>{soal.pertanyaan}</p>
               <GambarSoal nama={soal.gambar} />
@@ -298,15 +298,15 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
                       aria-checked={dipilih}
                       onClick={() => pilih(huruf)}
                       className={cn(
-                        'flex w-full items-start gap-3 rounded-lg border-2 px-4 py-3 text-left transition-colors',
-                        dipilih ? 'border-jeruk bg-jeruk-muda' : 'border-border bg-white hover:border-tinta',
+                        'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
+                        dipilih ? 'border-biru bg-biru-muda' : 'border-garis bg-white hover:border-input hover:bg-latar',
                       )}
                       style={{ fontSize: 'var(--ukuran-soal)' }}
                     >
                       <span className={cn(
-                        'grid size-9 shrink-0 place-content-center border-2 text-base font-extrabold',
+                        'grid size-8 shrink-0 place-content-center border text-[15px] font-semibold',
                         soal.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
-                        dipilih ? 'border-jeruk bg-jeruk text-white' : 'border-tinta',
+                        dipilih ? 'border-biru bg-biru text-white' : 'border-input',
                       )}>{huruf}</span>
                       <span className="pt-1 whitespace-pre-line">{teks}</span>
                     </button>
@@ -316,18 +316,18 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
 
               <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <Button variant="outline" size="lg" disabled={indeks === 0} onClick={() => setIndeks((i) => i - 1)}>
-                  <ArrowLeft weight="bold" /> Sebelumnya
+                  <ArrowLeft /> Sebelumnya
                 </Button>
-                <Button variant="matahari" size="lg" aria-pressed={ragu.includes(soal.id)} onClick={tandaiRagu} className="order-last col-span-2 sm:order-none sm:col-span-1">
+                <Button variant="kuning" size="lg" aria-pressed={ragu.includes(soal.id)} onClick={tandaiRagu} className="order-last col-span-2 sm:order-none sm:col-span-1">
                   <Flag weight={ragu.includes(soal.id) ? 'fill' : 'bold'} /> {ragu.includes(soal.id) ? 'Ditandai ragu' : 'Ragu-ragu'}
                 </Button>
                 {terakhir ? (
-                  <Button variant="daun" size="lg" onClick={mintaKirim} disabled={kirim.isPending}>
-                    <CheckCircle weight="bold" /> Selesai
+                  <Button variant="hijau" size="lg" onClick={mintaKirim} disabled={kirim.isPending}>
+                    <CheckCircle /> Selesai
                   </Button>
                 ) : (
                   <Button size="lg" onClick={() => { setIndeks((i) => i + 1); window.scrollTo({ top: 0 }); }}>
-                    Berikutnya <ArrowRight weight="bold" />
+                    Berikutnya <ArrowRight />
                   </Button>
                 )}
               </div>
@@ -338,7 +338,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
 
         <aside
           className={cn(
-            'h-fit rounded-xl border-2 border-tinta bg-white p-4',
+            'h-fit rounded-lg border border-garis bg-white p-4',
             panelTerbuka ? 'fixed inset-x-3 top-[68px] z-20 max-h-[75dvh] overflow-y-auto lg:static' : 'hidden lg:block',
           )}
           aria-label="Navigasi soal"
@@ -354,9 +354,9 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
                 aria-label={`Soal ${n.i + 1}${n.terjawab ? ', sudah dijawab' : ''}${n.ragu ? ', ragu-ragu' : ''}`}
                 aria-current={n.i === indeks ? 'step' : undefined}
                 className={cn(
-                  'h-11 rounded-md border-2 text-sm font-extrabold transition-colors disabled:opacity-50',
-                  n.ragu ? 'border-tinta bg-matahari' : n.terjawab ? 'border-daun bg-daun text-white' : 'border-input bg-white',
-                  n.i === indeks && 'ring-3 ring-jeruk ring-offset-2',
+                  'h-10 rounded-sm border text-sm font-semibold transition-colors disabled:opacity-50',
+                  n.ragu ? 'border-kuning bg-kuning' : n.terjawab ? 'border-hijau bg-hijau text-white' : 'border-input bg-white',
+                  n.i === indeks && 'ring-2 ring-biru ring-offset-2',
                 )}
               >
                 {n.i + 1}
@@ -364,11 +364,11 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
             ))}
           </div>
           <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm bg-daun" /> Sudah dijawab</li>
-            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border border-tinta bg-matahari" /> Ragu-ragu</li>
-            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border-2 border-input bg-white" /> Belum dijawab</li>
+            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm bg-hijau" /> Sudah dijawab</li>
+            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border border-garis bg-kuning" /> Ragu-ragu</li>
+            <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border border-input bg-white" /> Belum dijawab</li>
           </ul>
-          <Button variant="daun" className="mt-5 w-full" onClick={mintaKirim} disabled={kirim.isPending || terkunci}>
+          <Button variant="hijau" className="mt-5 w-full" onClick={mintaKirim} disabled={kirim.isPending || terkunci}>
             {kirim.isPending ? 'Mengirim...' : 'Selesai & kirim'}
           </Button>
         </aside>
@@ -392,8 +392,8 @@ function PratinjauKamera({ videoRef, status, jumlahWajah }: {
     : status === 'ditolak' ? 'Kamera mati' : status === 'galat' ? 'Deteksi wajah gagal dimuat' : 'Menyiapkan kamera';
   return (
     <div className="relative shrink-0" title={label}>
-      <video ref={videoRef} muted playsInline aria-label="Pratinjau kamera" className={cn('h-11 w-14 rounded-md border-2 bg-tinta object-cover -scale-x-100', baik ? 'border-daun' : 'border-bata')} />
-      <span className={cn('absolute -right-1 -bottom-1 grid size-5 place-content-center rounded-full border-2 border-white', baik ? 'bg-daun' : 'bg-bata')}>
+      <video ref={videoRef} muted playsInline aria-label="Pratinjau kamera" className={cn('h-11 w-14 rounded-md border bg-tinta object-cover -scale-x-100', baik ? 'border-hijau' : 'border-merah')} />
+      <span className={cn('absolute -right-1 -bottom-1 grid size-5 place-content-center rounded-full border border-white', baik ? 'bg-hijau' : 'bg-merah')}>
         <Camera weight="fill" className="size-3 text-white" />
       </span>
       <span className="sr-only" role="status">{label}</span>
@@ -405,15 +405,15 @@ function PenguncianLayar({ kamera, nyalakanKamera, jumlahPelanggaran, maks }: {
   kamera: boolean; nyalakanKamera: () => void; jumlahPelanggaran: number; maks: number;
 }) {
   return (
-    <section className="stiker rounded-xl bg-white p-6 text-center sm:p-10" role="alert">
-      {kamera ? <Camera weight="bold" className="mx-auto size-12 text-bata" /> : <ArrowsOut weight="bold" className="mx-auto size-12 text-jeruk" />}
-      <h2 className="mt-4 text-2xl">{kamera ? 'Kamera harus menyala' : 'Kembali ke layar penuh'}</h2>
+    <section className="rounded-lg border border-garis bg-white p-6 text-center sm:p-10" role="alert">
+      {kamera ? <Camera className="mx-auto size-12 text-merah" /> : <ArrowsOut className="mx-auto size-12 text-biru" />}
+      <h2 className="mt-4 text-xl">{kamera ? 'Kamera harus menyala' : 'Kembali ke layar penuh'}</h2>
       <p className="mx-auto mt-2 max-w-md text-muted-foreground">
         {kamera
           ? 'Ujian ini diawasi kamera. Izinkan akses kamera di browser, lalu tekan tombol di bawah.'
-          : 'Soal disembunyikan selama kamu tidak berada di layar penuh. Waktu ujian tetap berjalan.'}
+          : 'Soal disembunyikan selama Anda tidak berada di layar penuh. Waktu ujian tetap berjalan.'}
       </p>
-      {maks > 0 && <p className="mt-3 font-bold text-bata">Pelanggaran tercatat: {jumlahPelanggaran} dari {maks}</p>}
+      {maks > 0 && <p className="mt-3 font-semibold text-merah">Pelanggaran tercatat: {jumlahPelanggaran} dari {maks}</p>}
       <Button size="lg" className="mt-6" onClick={kamera ? nyalakanKamera : () => masukLayarPenuh()}>
         {kamera ? 'Nyalakan kamera' : 'Kembali ke layar penuh'}
       </Button>
@@ -430,14 +430,14 @@ function DialogPeringatan({ peringatan, tutup }: { peringatan: Peringatan | null
       role="alertdialog" aria-modal="true" aria-labelledby="judul-peringatan"
       onKeyDown={(e) => e.key === 'Escape' && tutup()}
     >
-      <div className="stiker w-full max-w-md rounded-xl bg-white p-6 text-center">
-        <WarningOctagon weight="fill" className="mx-auto size-12 text-bata" />
+      <div className="w-full max-w-md rounded-xl border border-garis bg-white p-6 text-center shadow-xl">
+        <WarningOctagon weight="fill" className="mx-auto size-12 text-merah" />
         <h2 id="judul-peringatan" className="mt-3 text-xl">Pelanggaran tercatat</h2>
-        <p className="mt-2 font-bold">{LABEL_PELANGGARAN[peringatan.jenis]}</p>
+        <p className="mt-2 font-semibold">{LABEL_PELANGGARAN[peringatan.jenis]}</p>
         <p className="mt-2 text-sm text-muted-foreground">
           Pengawas dapat melihat catatan ini.
           {sisa !== null && (sisa > 0
-            ? ` Jika terjadi ${sisa} kali lagi, ujianmu dikirim otomatis.`
+            ? ` Jika terjadi ${sisa} kali lagi, ujian Anda dikirim otomatis.`
             : '')}
         </p>
         <Button size="lg" className="mt-6 w-full" autoFocus onClick={tutup}>Saya mengerti, lanjutkan</Button>

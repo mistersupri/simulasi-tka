@@ -33,17 +33,17 @@ export default function Dashboard() {
       <KepalaHalaman judul={`Selamat datang, ${staf.nama.split(' ')[0]}`} keterangan={formatTanggal(new Date(), true)} />
 
       {/* Titik fokus: ujian yang sedang berjalan sekarang. */}
-      <section className="stiker flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white p-6">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-garis bg-white p-6">
         <div>
-          <p className="text-sm font-bold text-muted-foreground">Sedang mengerjakan sekarang</p>
-          <p className="text-5xl font-extrabold tabular-nums">{d.sedangUjian} <span className="text-xl text-muted-foreground">siswa</span></p>
+          <p className="text-sm text-muted-foreground">Sedang mengerjakan sekarang</p>
+          <p className="text-4xl font-semibold tabular-nums">{d.sedangUjian} <span className="text-xl text-muted-foreground">siswa</span></p>
           <p className="mt-1 text-sm text-muted-foreground">{d.ujianDibuka} ujian sedang dibuka</p>
         </div>
         <Link to="/admin/monitor" className={buttonVariants({ size: 'lg' })}>Pantau ujian</Link>
       </section>
 
       {langkah.length > 0 && (
-        <Card className="mt-6 border-tinta bg-matahari-muda">
+        <Card className="mt-6 border-garis bg-kuning-muda">
           <CardTitle>Langkah awal</CardTitle>
           <ol className="mt-3 space-y-3">
             {langkah.map((l, i) => (
@@ -63,9 +63,9 @@ export default function Dashboard() {
           ['Hasil masuk', d.jumlahHasil, 'semua ujian'],
           ['Rata-rata nilai', d.rataRata ?? '-', d.rataRata === null ? 'belum ada hasil' : 'semua ujian'],
         ].map(([label, nilai, ket]) => (
-          <div key={label as string} className="rounded-lg border-2 border-border bg-white p-4">
-            <dt className="text-sm font-bold text-muted-foreground">{label}</dt>
-            <dd className="text-3xl font-extrabold tabular-nums">{nilai}</dd>
+          <div key={label as string} className="rounded-lg border border-border bg-white p-4">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd className="text-2xl font-semibold tabular-nums">{nilai}</dd>
             <dd className="text-xs text-muted-foreground">{ket}</dd>
           </div>
         ))}
@@ -83,7 +83,7 @@ export default function Dashboard() {
                     <TableRow key={h.id}>
                       <TableCell><b>{h.namaSiswa}</b><div className="text-xs text-muted-foreground">Kelas {h.kelas} · {formatTanggal(h.tanggal)}</div></TableCell>
                       <TableCell>{h.namaUjian}</TableCell>
-                      <TableCell className="text-right text-lg font-extrabold tabular-nums">{h.nilai}</TableCell>
+                      <TableCell className="text-right text-lg font-semibold tabular-nums">{h.nilai}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -109,9 +109,9 @@ function Batang({ judul, data }: { judul: string; data: { label: string; jumlah:
         <ul className="mt-3 space-y-2">
           {data.map((x) => (
             <li key={x.label} className="grid grid-cols-[minmax(0,1fr)_2fr_2.5rem] items-center gap-3 text-sm">
-              <span className="truncate font-bold" title={x.label}>{x.label}</span>
-              <span className="h-3 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-jeruk" style={{ width: `${(x.jumlah / maks) * 100}%` }} /></span>
-              <span className="text-right font-extrabold tabular-nums">{x.jumlah}</span>
+              <span className="truncate font-semibold" title={x.label}>{x.label}</span>
+              <span className="h-2 overflow-hidden rounded-sm bg-muted"><span className="block h-full rounded-sm bg-biru" style={{ width: `${(x.jumlah / maks) * 100}%` }} /></span>
+              <span className="text-right font-semibold tabular-nums">{x.jumlah}</span>
             </li>
           ))}
         </ul>
