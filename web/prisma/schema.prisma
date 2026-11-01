@@ -45,6 +45,7 @@ enum JenisPelanggaran {
   KAMERA_TIDAK_AKTIF
   SALIN_TEMPEL
   PINTASAN_TERLARANG
+  LAYAR_TIDAK_DIBAGIKAN
 }
 
 model Pengaturan {
@@ -131,6 +132,7 @@ model Ujian {
   wajibKamera         Boolean   @default(false)
   maksPelanggaran     Int       @default(5)  // 0 = tidak dikirim otomatis
   wajibAplikasi       Boolean   @default(false) // hanya lewat aplikasi ujian Windows
+  intervalRekamLayar  Int       @default(0)     // detik antar tangkapan layar; 0 = tidak direkam
   aktif               Boolean   @default(true)
   dibuat              DateTime  @default(now())
   sesi                SesiUjian[]
@@ -153,6 +155,7 @@ model SesiUjian {
   terakhirAktif     DateTime        @default(now())
   jumlahPelanggaran Int             @default(0)
   pelanggaran       Pelanggaran[]
+  tangkapanLayar    TangkapanLayar[]
   hasil             Hasil?
 
   @@index([siswaId, status])
@@ -169,6 +172,26 @@ model Pelanggaran {
   detail      String           @default("")
 
   @@index([sesiUjianId])
+}
+
+enum PemicuTangkapan {
+  BERKALA
+  PELANGGARAN
+}
+
+// Tangkapan layar siswa selama ujian (fitur "rekam layar" per ujian).
+// Berkas di UPLOAD_DIR/layar, dihapus otomatis setelah SIMPAN_TANGKAPAN_HARI.
+model TangkapanLayar {
+  id          String          @id @default(cuid())
+  sesiUjian   SesiUjian       @relation(fields: [sesiUjianId], references: [id], onDelete: Cascade)
+  sesiUjianId String
+  waktu       DateTime        @default(now())
+  berkas      String
+  pemicu      PemicuTangkapan @default(BERKALA)
+  keterangan  String          @default("")
+
+  @@index([sesiUjianId, waktu])
+  @@index([waktu])
 }
 
 // Hasil menyimpan salinan nama/kelas/ujian agar tetap terbaca

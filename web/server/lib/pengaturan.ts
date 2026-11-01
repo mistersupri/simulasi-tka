@@ -7,10 +7,12 @@ export const PENGATURAN_BAWAAN = {
   KKM: '70',
   LOGO: '',
   SISWA_BOLEH_GANTI_PASSWORD: 'YA',
+  // Tangkapan layar ujian dihapus otomatis setelah sekian hari.
+  SIMPAN_TANGKAPAN_HARI: '30',
 };
 
 export type Pengaturan = typeof PENGATURAN_BAWAAN;
-export const PENGATURAN_DAPAT_DIUBAH = ['NAMA_SEKOLAH', 'TAHUN_AJARAN', 'PENGUMUMAN', 'KKM', 'SISWA_BOLEH_GANTI_PASSWORD'] as const;
+export const PENGATURAN_DAPAT_DIUBAH = ['NAMA_SEKOLAH', 'TAHUN_AJARAN', 'PENGUMUMAN', 'KKM', 'SISWA_BOLEH_GANTI_PASSWORD', 'SIMPAN_TANGKAPAN_HARI'] as const;
 
 export async function ambilPengaturan(): Promise<Pengaturan> {
   const baris = await prisma.pengaturan.findMany();

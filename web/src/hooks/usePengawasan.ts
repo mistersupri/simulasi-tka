@@ -23,12 +23,18 @@ const JEDA_JENIS_MS = 10_000;
 /** Keluar layar penuh biasanya juga memicu blur/pindah tab: hitung sekali saja. */
 const JEDA_SEMUA_MS = 2_000;
 
+let jedaSampai = 0;
+/** Abaikan pelanggaran mulai sekarang selama sekian ms (dialog bawaan browser membuat halaman kehilangan fokus). */
+export function jedaPengawasan(ms: number) {
+  jedaSampai = Date.now() + ms;
+}
+
 export function usePencatatPelanggaran(lapor: Lapor) {
   const terakhir = useRef<Record<string, number>>({});
   const terakhirApaSaja = useRef(0);
   return useCallback<Lapor>((jenis, detail, foto) => {
     // Pengawas sedang membuka jendela izin keluar di aplikasi Windows.
-    if (aplikasi?.jeda()) return;
+    if (aplikasi?.jeda() || Date.now() < jedaSampai) return;
     const sekarang = Date.now();
     if (sekarang - (terakhir.current[jenis] ?? 0) < JEDA_JENIS_MS) return;
     if (sekarang - terakhirApaSaja.current < JEDA_SEMUA_MS) return;

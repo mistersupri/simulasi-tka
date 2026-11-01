@@ -1,4 +1,4 @@
-import { ArrowsClockwise, ArrowsOut, Camera, ChartBar, Desktop, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
+import { ArrowsClockwise, ArrowsOut, Camera, ChartBar, Desktop, Monitor, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { api, pesanGalat } from '@/lib/api';
 import { dariInputWaktu, formatTanggal, keInputWaktu } from '@/lib/format';
@@ -17,6 +18,9 @@ import type { Ujian } from '@/lib/tipe';
 import { DialogAnalisis } from './Hasil';
 
 type Data = { ujian: Ujian[]; daftarMapel: string[]; aplikasiTersedia: boolean };
+
+const PILIHAN_INTERVAL: [string, string][] = [['0', 'Tidak direkam'], ['30', 'Setiap 30 detik'], ['60', 'Setiap 1 menit'], ['120', 'Setiap 2 menit'], ['300', 'Setiap 5 menit']];
+const labelInterval = (detik: number) => (detik % 60 === 0 ? `${detik / 60} menit` : `${detik} detik`);
 
 function statusJadwal(u: Ujian) {
   const sekarang = Date.now();
@@ -81,6 +85,7 @@ export default function HalamanUjian() {
                   {u.wajibLayarPenuh && <Badge><ArrowsOut /> Layar penuh</Badge>}
                   {u.wajibKamera && <Badge><Camera /> Kamera</Badge>}
                   {u.wajibAplikasi && <Badge><Desktop /> Hanya aplikasi Windows</Badge>}
+                  {u.intervalRekamLayar > 0 && <Badge><Monitor /> Rekam layar tiap {labelInterval(u.intervalRekamLayar)}</Badge>}
                   {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
                 {kekurangan.length > 0 && (
@@ -138,6 +143,7 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
     wajibKamera: ujian?.wajibKamera ?? false,
     maksPelanggaran: String(ujian?.maksPelanggaran ?? 5),
     wajibAplikasi: ujian?.wajibAplikasi ?? false,
+    intervalRekamLayar: String(ujian?.intervalRekamLayar ?? 0),
     aktif: ujian?.aktif ?? true,
   });
   const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
@@ -194,6 +200,19 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
                     : 'Belum bisa dipakai: isi KUNCI_APLIKASI di server lalu buat installer dengan kunci yang sama.'}
                   checked={d.wajibAplikasi} ubah={(v) => ubah('wajibAplikasi', v)} disabled={!aplikasiTersedia && !d.wajibAplikasi}
                 />
+                <div className="space-y-1.5">
+                  <Label htmlFor="u-rekam">Rekam layar</Label>
+                  <Select value={d.intervalRekamLayar} onValueChange={(v) => ubah('intervalRekamLayar', v)}>
+                    <SelectTrigger id="u-rekam" aria-label="Rekam layar"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PILIHAN_INTERVAL.map(([nilai, label]) => <SelectItem key={nilai} value={nilai}>{label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Tangkapan layar berkala dan saat pelanggaran. Di browser siswa wajib membagikan seluruh layar,
+                    sehingga ujian tidak bisa dikerjakan di HP/tablet.
+                  </p>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="u-maks-langgar">Kirim otomatis pada pelanggaran ke-</Label>
                   <Input id="u-maks-langgar" type="number" min={0} value={d.maksPelanggaran} onChange={(e) => ubah('maksPelanggaran', e.target.value)} className="max-w-32" />

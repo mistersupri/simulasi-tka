@@ -15,8 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, pesanGalat } from '@/lib/api';
 import { formatDurasi, formatTanggal } from '@/lib/format';
 import { unduhCsv } from '@/lib/tabel';
-import type { Hasil, ItemPembahasan, Pelanggaran, Ujian } from '@/lib/tipe';
+import type { Hasil, ItemPembahasan, Pelanggaran, TangkapanLayar, Ujian } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
+import { GaleriLayar } from '@/components/GaleriLayar';
 import { DaftarPelanggaran } from './Monitor';
 
 const SEMUA = 'semua';
@@ -126,7 +127,7 @@ export default function HalamanHasil() {
 function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutup: () => void }) {
   const q = useQuery({
     queryKey: ['hasil-detail', id],
-    queryFn: () => api.get<{ hasil: Hasil; soal: ItemPembahasan[]; pelanggaran: Pelanggaran[] }>(`/admin/hasil/${id}`),
+    queryFn: () => api.get<{ hasil: Hasil; soal: ItemPembahasan[]; pelanggaran: Pelanggaran[]; tangkapanLayar: TangkapanLayar[] }>(`/admin/hasil/${id}`),
     enabled: !!id,
   });
   return (
@@ -159,6 +160,12 @@ function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutu
                 <h3 className="text-base">Catatan pengawasan</h3>
                 <div className="mt-3"><DaftarPelanggaran daftar={q.data.pelanggaran} /></div>
               </section>
+              {q.data.tangkapanLayar.length > 0 && (
+                <section className="lg:col-span-2">
+                  <h3 className="text-base">Rekaman layar</h3>
+                  <div className="mt-3"><GaleriLayar daftar={q.data.tangkapanLayar} /></div>
+                </section>
+              )}
             </div>
           )}
         </DialogBody>

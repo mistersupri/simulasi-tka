@@ -1,5 +1,5 @@
 import {
-  ArrowsOut, Camera, CheckCircle, Clock, Desktop, Key, ListNumbers, Megaphone, Power, SignOut,
+  ArrowsOut, Camera, CheckCircle, Clock, Desktop, Key, ListNumbers, Megaphone, Monitor, Power, SignOut,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useProfilSiswa } from '@/hooks/useProfil';
 import { layarPenuhDidukung, masukLayarPenuh } from '@/hooks/usePengawasan';
+import { rekamLayarDidukung } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
 import { formatTanggal } from '@/lib/format';
@@ -172,8 +173,10 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
 
 function KartuUjian({ ujian: u, diAplikasi, pilih }: { ujian: UjianSiswa; diAplikasi: boolean; pilih: () => void }) {
   const perluAplikasi = u.wajibAplikasi && !diAplikasi;
+  // HP/tablet tidak bisa membagikan layar.
+  const perluKomputer = !perluAplikasi && u.rekamLayar && !rekamLayarDidukung();
   const s = perluAplikasi && u.status === 'TERSEDIA' ? { label: 'Khusus komputer lab', varian: 'biru' as const } : STATUS[u.status];
-  const bisa = (u.status === 'TERSEDIA' || u.status === 'BERLANGSUNG') && !perluAplikasi;
+  const bisa = (u.status === 'TERSEDIA' || u.status === 'BERLANGSUNG') && !perluAplikasi && !perluKomputer;
   return (
     <article className="flex flex-col rounded-lg border border-garis bg-white p-5">
       <div className="flex items-center justify-between gap-2">
@@ -187,6 +190,7 @@ function KartuUjian({ ujian: u, diAplikasi, pilih }: { ujian: UjianSiswa; diApli
         {u.wajibLayarPenuh && <li className="flex items-center gap-2"><ArrowsOut className="size-4" /> Layar penuh</li>}
         {u.wajibKamera && <li className="flex items-center gap-2"><Camera className="size-4" /> Diawasi kamera</li>}
         {u.wajibAplikasi && <li className="flex items-center gap-2"><Desktop className="size-4" /> Hanya lewat aplikasi ujian</li>}
+        {u.rekamLayar && <li className="flex items-center gap-2"><Monitor className="size-4" /> Layar direkam</li>}
         {(u.waktuMulai || u.waktuSelesai) && (
           <li className="text-muted-foreground">
             {u.waktuMulai && <>Dibuka {formatTanggal(u.waktuMulai)}</>}
@@ -198,6 +202,10 @@ function KartuUjian({ ujian: u, diAplikasi, pilih }: { ujian: UjianSiswa; diApli
       <div className="mt-5 flex-1" />
       {u.status === 'SELESAI' ? (
         <p className="flex items-center gap-2 font-semibold text-hijau"><CheckCircle weight="fill" className="size-5" /> Sudah dikerjakan</p>
+      ) : perluKomputer ? (
+        <p className="flex items-start gap-2 rounded-md bg-biru-muda px-3 py-2.5 text-sm font-semibold text-biru-tua">
+          <Monitor className="mt-0.5 size-5 shrink-0" /> Ujian ini merekam layar dan hanya dapat dikerjakan di komputer atau laptop.
+        </p>
       ) : perluAplikasi ? (
         <p className="flex items-start gap-2 rounded-md bg-biru-muda px-3 py-2.5 text-sm font-semibold text-biru-tua">
           <Desktop className="mt-0.5 size-5 shrink-0" /> Ujian ini dikerjakan di komputer lab sekolah melalui aplikasi Ujian TKA.
@@ -271,6 +279,13 @@ function DialogMulai({ ujian, tutup }: { ujian: UjianSiswa | null; tutup: () => 
                   <li>
                     Ujian tampil <b>layar penuh</b>. Keluar dari layar penuh atau membuka aplikasi lain dicatat sebagai pelanggaran.
                     {!layarPenuhDidukung() && <span className="text-merah"> Perangkat Anda tidak mendukung layar penuh; berpindah aplikasi tetap dicatat.</span>}
+                  </li>
+                )}
+                {u.rekamLayar && (
+                  <li>
+                    <b>Layar Anda direkam</b> secara berkala selama ujian dan saat terjadi pelanggaran.
+                    {!aplikasi && ' Anda akan diminta membagikan "Seluruh layar". Menghentikan berbagi layar dicatat sebagai pelanggaran.'}
+                    {' '}Tutup aplikasi dan tab lain yang bersifat pribadi sebelum mulai.
                   </li>
                 )}
                 {u.wajibKamera && <li><b>Kamera</b> akan menyala untuk memastikan wajah Anda terlihat. Video tidak direkam; hanya foto saat ada pelanggaran.</li>}

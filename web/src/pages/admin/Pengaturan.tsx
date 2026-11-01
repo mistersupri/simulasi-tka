@@ -14,7 +14,7 @@ import { api, pesanGalat } from '@/lib/api';
 import { perkecilGambar } from '@/lib/gambar';
 
 type Data = {
-  pengaturan: { NAMA_SEKOLAH: string; TAHUN_AJARAN: string; PENGUMUMAN: string; KKM: string; SISWA_BOLEH_GANTI_PASSWORD: string };
+  pengaturan: { NAMA_SEKOLAH: string; TAHUN_AJARAN: string; PENGUMUMAN: string; KKM: string; SISWA_BOLEH_GANTI_PASSWORD: string; SIMPAN_TANGKAPAN_HARI: string };
   adaLogo: boolean;
 };
 type LaporanImpor = { siswa: number; soal: number; ujian: number; dilewati: { lembar: string; baris: number; alasan: string }[] };
@@ -22,7 +22,7 @@ type LaporanImpor = { siswa: number; soal: number; ujian: number; dilewati: { le
 export default function HalamanPengaturan() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['pengaturan'], queryFn: () => api.get<Data>('/admin/pengaturan') });
-  const [d, setD] = useState({ NAMA_SEKOLAH: '', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: '70', SISWA_BOLEH_GANTI_PASSWORD: true });
+  const [d, setD] = useState({ NAMA_SEKOLAH: '', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: '70', SISWA_BOLEH_GANTI_PASSWORD: true, SIMPAN_TANGKAPAN_HARI: '30' });
   const [laporan, setLaporan] = useState<LaporanImpor | null>(null);
   const [versiLogo, setVersiLogo] = useState(0);
 
@@ -79,6 +79,11 @@ export default function HalamanPengaturan() {
               <div className="space-y-1.5"><Label htmlFor="p-kkm">KKM</Label><Input id="p-kkm" type="number" min={0} max={100} value={d.KKM} onChange={(e) => setD({ ...d, KKM: e.target.value })} /><p className="text-xs text-muted-foreground">0 = tanpa KKM</p></div>
             </div>
             <div className="space-y-1.5"><Label htmlFor="p-umum">Pengumuman untuk siswa</Label><Textarea id="p-umum" rows={3} value={d.PENGUMUMAN} onChange={(e) => setD({ ...d, PENGUMUMAN: e.target.value })} placeholder="Tampil di beranda siswa" /></div>
+            <div className="space-y-1.5">
+              <Label htmlFor="p-simpan">Simpan tangkapan layar ujian (hari)</Label>
+              <Input id="p-simpan" type="number" min={1} max={365} className="max-w-32" value={d.SIMPAN_TANGKAPAN_HARI} onChange={(e) => setD({ ...d, SIMPAN_TANGKAPAN_HARI: e.target.value })} />
+              <p className="text-xs text-muted-foreground">Tangkapan yang lebih lama dihapus otomatis untuk menjaga privasi siswa dan ruang penyimpanan.</p>
+            </div>
             <Label className="font-semibold"><Switch checked={d.SISWA_BOLEH_GANTI_PASSWORD} onCheckedChange={(v) => setD({ ...d, SISWA_BOLEH_GANTI_PASSWORD: v })} /> Siswa boleh mengganti kata sandi sendiri</Label>
             <Button type="submit" disabled={simpan.isPending}>{simpan.isPending ? 'Menyimpan...' : 'Simpan pengaturan'}</Button>
           </form>

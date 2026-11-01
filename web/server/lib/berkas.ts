@@ -6,7 +6,7 @@ import multer from 'multer';
 import { config } from '../config.ts';
 import { galat } from './galat.ts';
 
-export type Folder = 'gambar' | 'pelanggaran';
+export type Folder = 'gambar' | 'pelanggaran' | 'layar';
 
 export const unggah = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.ukuranGambarMaks } });
 

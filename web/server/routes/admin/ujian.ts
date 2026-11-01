@@ -5,6 +5,7 @@ import { prisma, type Hasil } from '../../db.ts';
 import { kirimBerkas } from '../../lib/berkas.ts';
 import { config } from '../../config.ts';
 import { galat } from '../../lib/galat.ts';
+import { INTERVAL_REKAM_MIN_DETIK, hapusTangkapanSesi } from '../../lib/layar.ts';
 import { catatLog } from '../../lib/log.ts';
 import {
   finalisasiSesi, petaSoal, selesaikanKadaluarsa, sisaDetik, susunPembahasan, type ItemUrutan, type Jawaban,
@@ -61,7 +62,10 @@ const skemaUjian = z.object({
   wajibKamera: z.boolean().default(false),
   maksPelanggaran: z.coerce.number().int().min(0).default(5),
   wajibAplikasi: z.boolean().default(false),
+  intervalRekamLayar: z.coerce.number().int().min(0).max(600).default(0),
   aktif: z.boolean().default(true),
+}).refine((d) => d.intervalRekamLayar === 0 || d.intervalRekamLayar >= INTERVAL_REKAM_MIN_DETIK, {
+  message: `Interval rekam layar minimal ${INTERVAL_REKAM_MIN_DETIK} detik.`,
 }).refine((d) => !d.wajibAplikasi || !!config.kunciAplikasi, {
   message: 'Server belum diatur untuk aplikasi Windows (KUNCI_APLIKASI kosong).',
 }).refine((d) => !d.waktuMulai || !d.waktuSelesai || d.waktuSelesai > d.waktuMulai, {
@@ -114,7 +118,7 @@ rutAdminUjian.get('/hasil', async (_req, res) => {
 rutAdminUjian.get('/hasil/:id', async (req, res) => {
   const h = await prisma.hasil.findUnique({
     where: { id: String(req.params.id) },
-    include: { sesiUjian: { include: { pelanggaran: { orderBy: { waktu: 'asc' } } } } },
+    include: { sesiUjian: { include: { pelanggaran: { orderBy: { waktu: 'asc' } }, tangkapanLayar: { orderBy: { waktu: 'asc' } } } } },
   });
   if (!h) throw galat(404, 'Hasil tidak ditemukan.');
   const jawaban = h.jawaban as Jawaban;
@@ -126,6 +130,7 @@ rutAdminUjian.get('/hasil/:id', async (req, res) => {
     hasil,
     soal: susunPembahasan(urutan, jawaban, await petaSoal(urutan.map((u) => u.i)), true),
     pelanggaran: sesiUjian?.pelanggaran ?? [],
+    tangkapanLayar: sesiUjian?.tangkapanLayar ?? [],
   });
 });
 
@@ -250,6 +255,7 @@ rutAdminUjian.get('/monitor', async (_req, res) => {
       siswa: { select: { nama: true, kelas: true, username: true } },
       ujian: { select: { nama: true, maksPelanggaran: true } },
       pelanggaran: { orderBy: { waktu: 'desc' }, take: 1 },
+      tangkapanLayar: { orderBy: { waktu: 'desc' }, take: 1 },
     },
     orderBy: [{ ujianId: 'asc' }, { mulai: 'asc' }],
   });
@@ -270,12 +276,21 @@ rutAdminUjian.get('/monitor', async (_req, res) => {
       jumlahPelanggaran: s.jumlahPelanggaran,
       maksPelanggaran: s.ujian.maksPelanggaran,
       pelanggaranTerakhir: s.pelanggaran[0] ?? null,
+      tangkapanTerakhir: s.tangkapanLayar[0] ?? null,
     })),
   });
 });
 
 rutAdminUjian.get('/sesi/:id/pelanggaran', async (req, res) => {
   res.json(await prisma.pelanggaran.findMany({ where: { sesiUjianId: String(req.params.id) }, orderBy: { waktu: 'asc' } }));
+});
+
+rutAdminUjian.get('/sesi/:id/layar', async (req, res) => {
+  res.json(await prisma.tangkapanLayar.findMany({ where: { sesiUjianId: String(req.params.id) }, orderBy: { waktu: 'asc' } }));
+});
+
+rutAdminUjian.get('/berkas/layar/:nama', (req, res) => {
+  kirimBerkas(res, 'layar', String(req.params.nama));
 });
 
 rutAdminUjian.get('/berkas/pelanggaran/:nama', (req, res) => {
@@ -293,6 +308,7 @@ rutAdminUjian.post('/sesi/:id/aksi', async (req, res) => {
     await catatLog(req.staf!, 'PAKSA_KIRIM', sesi.siswa.username);
     res.json({ pesan: `Ujian ${sesi.siswa.nama} dikirim. Nilai: ${r.nilai.nilai}.` });
   } else if (aksi === 'RESET') {
+    await hapusTangkapanSesi(sesi.id);
     await prisma.sesiUjian.delete({ where: { id: sesi.id } });
     await catatLog(req.staf!, 'RESET_SESI', sesi.siswa.username);
     res.json({ pesan: `Sesi ${sesi.siswa.nama} direset. Siswa dapat memulai ulang.` });

@@ -15,6 +15,7 @@ jadi siswa tidak bisa membuka situs lain. Halaman guru/admin tetap dibuka lewat 
 | Hanya server sekolah | Tautan ke situs lain, jendela baru, dan webview ditolak. |
 | Kamera tanpa HTTPS | Alamat server sekolah dianggap aman, jadi deteksi wajah jalan di LAN tanpa sertifikat. Izin kamera diberikan otomatis, hanya untuk server sekolah. |
 | Monitor kedua | Bila ada lebih dari satu layar atau proyektor, ujian ditutup sampai layar tambahan dilepas. |
+| Rekam layar | Untuk ujian yang merekam layar, aplikasi mengambil tangkapan seluruh layar langsung (tanpa dialog berbagi layar). Perlindungan tangkapan layar dimatikan sesaat (±150 ms) selama pengambilan agar isi ujian dan jendela lain di atasnya ikut terekam. |
 | Wajib aplikasi | Ujian yang diberi tanda "Wajib lewat aplikasi ujian Windows" tidak bisa dikerjakan dari browser biasa atau HP. |
 | Ganti siswa | Login siswa sebelumnya dihapus setiap aplikasi dibuka. |
 | Tanpa koneksi | Halaman "tidak bisa terhubung" dengan tombol coba lagi; sambung ulang otomatis tiap 15 detik. |

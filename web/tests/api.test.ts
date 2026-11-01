@@ -312,3 +312,53 @@ describe('aplikasi ujian Windows', () => {
     expect(await prisma.logAktivitas.count({ where: { aksi: 'IZIN_KELUAR_APLIKASI' } })).toBe(1);
   });
 });
+
+describe('rekam layar', () => {
+  beforeEach(kosongkanDb);
+
+  it('unggah dibatasi, terlihat di monitor & detail hasil, hanya untuk staf, ikut terhapus saat reset', async () => {
+    const { admin, siswa } = await siapkan();
+    await admin.post('/api/admin/ujian').send({ nama: 'Rekam', mataPelajaran: 'Matematika', kelas: '6', intervalRekamLayar: 5 }).expect(400);
+    const { id } = (await admin.post('/api/admin/ujian').send({ nama: 'Rekam', mataPelajaran: 'Matematika', kelas: '6', intervalRekamLayar: 30 }).expect(200)).body;
+    expect((await siswa.get('/api/siswa/beranda')).body.ujian.find((u: { id: string }) => u.id === id).rekamLayar).toBe(true);
+
+    const paket = (await siswa.post(`/api/siswa/ujian/${id}/mulai`).send({}).expect(200)).body;
+    expect(paket.ujian.intervalRekamLayar).toBe(30);
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(200);
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(429);
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/layar`).field('pemicu', 'PELANGGARAN').field('keterangan', 'Pindah tab').attach('layar', PNG, 'l.png').expect(200);
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/layar`).attach('layar', Buffer.from('bukan gambar'), 'l.png').expect(429);
+
+    const mon = (await admin.get('/api/admin/monitor').expect(200)).body.sesi[0];
+    expect(mon.tangkapanTerakhir.pemicu).toBe('PELANGGARAN');
+    const daftar = (await admin.get(`/api/admin/sesi/${paket.sesiId}/layar`).expect(200)).body;
+    expect(daftar).toHaveLength(2);
+    await admin.get(`/api/admin/berkas/layar/${daftar[0].berkas}`).expect(200);
+    await siswa.get(`/api/admin/berkas/layar/${daftar[0].berkas}`).expect(401);
+
+    await admin.post(`/api/admin/sesi/${paket.sesiId}/aksi`).send({ aksi: 'RESET' }).expect(200);
+    expect(await prisma.tangkapanLayar.count()).toBe(0);
+    await admin.get(`/api/admin/berkas/layar/${daftar[0].berkas}`).expect(404);
+
+    const p2 = (await siswa.post(`/api/siswa/ujian/${id}/mulai`).send({})).body;
+    await siswa.post(`/api/siswa/sesi/${p2.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(200);
+    const hasil = (await siswa.post(`/api/siswa/sesi/${p2.sesiId}/kirim`).send({ jawaban: {} })).body;
+    await siswa.post(`/api/siswa/sesi/${p2.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(409);
+    const detail = (await admin.get(`/api/admin/hasil/${hasil.id}`).expect(200)).body;
+    expect(detail.tangkapanLayar).toHaveLength(1);
+  });
+
+  it('ujian tanpa rekam layar menolak unggahan; tangkapan lama dibersihkan sesuai pengaturan', async () => {
+    const { admin, siswa, ujianId } = await siapkan();
+    const paket = (await siswa.post(`/api/siswa/ujian/${ujianId}/mulai`).send({})).body;
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(400);
+
+    const { id } = (await admin.post('/api/admin/ujian').send({ nama: 'Rekam', mataPelajaran: 'Matematika', kelas: '6', intervalRekamLayar: 60, maksPercobaan: 0 })).body;
+    const p2 = (await siswa.post(`/api/siswa/ujian/${id}/mulai`).send({})).body;
+    await siswa.post(`/api/siswa/sesi/${p2.sesiId}/layar`).attach('layar', PNG, 'l.png').expect(200);
+    await prisma.tangkapanLayar.updateMany({ data: { waktu: new Date(Date.now() - 40 * 86400_000) } });
+    const { bersihkanTangkapanLama } = await import('../server/lib/layar.ts');
+    expect(await bersihkanTangkapanLama()).toBe(1);
+    expect(await prisma.tangkapanLayar.count()).toBe(0);
+  });
+});

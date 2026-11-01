@@ -4,6 +4,7 @@ import { prisma, type JenisPelanggaran, type SesiUjian, type Ujian } from '../db
 import { dariAplikasi } from '../lib/aplikasi.ts';
 import { simpanGambar, unggah } from '../lib/berkas.ts';
 import { galat } from '../lib/galat.ts';
+import { JEDA_MIN_BERKALA_DETIK, JEDA_MIN_PELANGGARAN_DETIK } from '../lib/layar.ts';
 import {
   finalisasiSesi, jawabanKeAsli, jawabanKeTampil, petaSoal, selesaikanKadaluarsa, sesiKadaluarsa, sisaDetik,
   susunPembahasan, type ItemUrutan, type Jawaban,
@@ -67,6 +68,7 @@ rutSiswa.get('/beranda', async (req, res) => {
       wajibLayarPenuh: u.wajibLayarPenuh,
       wajibKamera: u.wajibKamera,
       wajibAplikasi: u.wajibAplikasi,
+      rekamLayar: u.intervalRekamLayar > 0,
       maksPercobaan: u.maksPercobaan,
       jumlahSelesai: selesai,
       sesiId: sesi?.id ?? null,
@@ -105,6 +107,7 @@ async function paketUjian(sesi: SesiUjian, ujian: Ujian) {
       wajibLayarPenuh: ujian.wajibLayarPenuh,
       wajibKamera: ujian.wajibKamera,
       maksPelanggaran: ujian.maksPelanggaran,
+      intervalRekamLayar: ujian.intervalRekamLayar,
     },
     soal: urutan.flatMap((item) => {
       const s = peta.get(item.i);
@@ -232,7 +235,7 @@ rutSiswa.post('/sesi/:sesiId/kirim', async (req, res) => {
 
 const JENIS_PELANGGARAN: JenisPelanggaran[] = [
   'KELUAR_LAYAR_PENUH', 'PINDAH_TAB', 'WAJAH_TIDAK_TERLIHAT', 'WAJAH_LEBIH_DARI_SATU',
-  'KAMERA_TIDAK_AKTIF', 'SALIN_TEMPEL', 'PINTASAN_TERLARANG',
+  'KAMERA_TIDAK_AKTIF', 'SALIN_TEMPEL', 'PINTASAN_TERLARANG', 'LAYAR_TIDAK_DIBAGIKAN',
 ];
 
 /**
@@ -273,6 +276,33 @@ rutSiswa.post('/sesi/:sesiId/pelanggaran', unggah.single('foto'), async (req, re
     return;
   }
   res.json({ jumlah: diperbarui.jumlahPelanggaran, maks, dihentikan: false });
+});
+
+/**
+ * Tangkapan layar (multipart: layar, pemicu, keterangan). Hanya untuk ujian yang
+ * mengaktifkan rekam layar; frekuensi dibatasi di server.
+ */
+rutSiswa.post('/sesi/:sesiId/layar', unggah.single('layar'), async (req, res) => {
+  const sesi = await sesiMilik(req);
+  if (sesi.status !== 'BERLANGSUNG') throw galat(409, 'Ujian sudah selesai.');
+  if (sesi.ujian.intervalRekamLayar <= 0) throw galat(400, 'Ujian ini tidak merekam layar.');
+  const { pemicu, keterangan } = z.object({
+    pemicu: z.enum(['BERKALA', 'PELANGGARAN']).default('BERKALA'),
+    keterangan: z.string().max(200).default(''),
+  }).parse(req.body);
+
+  const terakhir = await prisma.tangkapanLayar.findFirst({
+    where: { sesiUjianId: sesi.id, pemicu }, orderBy: { waktu: 'desc' }, select: { waktu: true },
+  });
+  const jeda = pemicu === 'BERKALA' ? Math.min(JEDA_MIN_BERKALA_DETIK, sesi.ujian.intervalRekamLayar) : JEDA_MIN_PELANGGARAN_DETIK;
+  if (terakhir && Date.now() - terakhir.waktu.getTime() < jeda * 1000) {
+    res.status(429).json({ pesan: 'Terlalu sering.' });
+    return;
+  }
+
+  const berkas = await simpanGambar(req.file?.buffer, 'layar');
+  await prisma.tangkapanLayar.create({ data: { sesiUjianId: sesi.id, berkas, pemicu, keterangan } });
+  res.json({ ok: true });
 });
 
 rutSiswa.get('/hasil/:id', async (req, res) => {

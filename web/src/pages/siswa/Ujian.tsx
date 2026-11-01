@@ -1,5 +1,5 @@
 import {
-  ArrowLeft, ArrowRight, ArrowsOut, Camera, CheckCircle, Flag, GridFour, Minus, Plus, WarningOctagon,
+  ArrowLeft, ArrowRight, ArrowsOut, Camera, CheckCircle, Flag, GridFour, Minus, Monitor, Plus, WarningOctagon,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import {
   keluarLayarPenuh, masukLayarPenuh, useAntiContek, useDeteksiWajah, useLayarPenuh, usePencatatPelanggaran,
   type Lapor, type StatusKamera,
 } from '@/hooks/usePengawasan';
+import { useRekamLayar } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { formatJam } from '@/lib/format';
 import { LABEL_PELANGGARAN, type HasilSiswa, type JenisPelanggaran, type PaketUjian } from '@/lib/tipe';
@@ -192,6 +193,8 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
   };
 
   // ---------------- Pengawasan ----------------
+  // Diisi setelah useRekamLayar: ambil tangkapan layar sesaat setelah pelanggaran.
+  const tangkapLayarRef = useRef<(keterangan: string) => void>(() => {});
   const laporKeServer = useCallback<Lapor>(async (jenis, detail, foto) => {
     const form = new FormData();
     form.append('jenis', jenis);
@@ -206,6 +209,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
         akhiri(r.hasil);
       } else {
         setPeringatan({ jenis, jumlah: r.jumlah, maks: r.maks });
+        tangkapLayarRef.current(LABEL_PELANGGARAN[jenis]);
       }
     } catch (err) {
       tanganiGalatSesi(err);
@@ -216,6 +220,9 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
   useAntiContek(pengawasanAktif, lapor);
   const diLayarPenuh = useLayarPenuh(pengawasanAktif && paket.ujian.wajibLayarPenuh, lapor);
   const kamera = useDeteksiWajah(pengawasanAktif && paket.ujian.wajibKamera, lapor);
+  const rekamLayar = paket.ujian.intervalRekamLayar > 0;
+  const layar = useRekamLayar({ aktif: pengawasanAktif && rekamLayar, intervalDetik: paket.ujian.intervalRekamLayar, sesiId: paket.sesiId, lapor });
+  tangkapLayarRef.current = layar.tangkapPelanggaran;
 
   useEffect(() => {
     if (selesai) return;
@@ -224,9 +231,14 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     return () => window.removeEventListener('beforeunload', cegah);
   }, [selesai]);
 
-  const terkunciLayar = paket.ujian.wajibLayarPenuh && !diLayarPenuh;
-  const terkunciKamera = paket.ujian.wajibKamera && kamera.status === 'ditolak';
-  const terkunci = terkunciLayar || terkunciKamera;
+  // Urutan prioritas layar kunci: kamera, berbagi layar, layar penuh.
+  const kunci: JenisKunci | null =
+    paket.ujian.wajibKamera && kamera.status === 'ditolak' ? 'kamera'
+    : rekamLayar && layar.status === 'perlu-izin' ? 'bagikan-layar'
+    : rekamLayar && layar.status === 'salah-pilih' ? 'salah-pilih'
+    : paket.ujian.wajibLayarPenuh && !diLayarPenuh ? 'layar-penuh'
+    : null;
+  const terkunci = kunci !== null;
 
   const daftarNomor = useMemo(() => paket.soal.map((s, i) => ({
     i, id: s.id, terjawab: !!jawaban[s.id], ragu: ragu.includes(s.id),
@@ -253,6 +265,12 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
             <span className="w-6 text-center text-xs font-semibold" aria-hidden>Aa</span>
             <Button variant="kepala" size="icon-sm" aria-label="Perbesar huruf" onClick={() => setUkuranHuruf((u) => Math.min(28, u + 2))}><Plus /></Button>
           </div>
+          {rekamLayar && layar.status === 'aktif' && (
+            // Transparansi: siswa selalu tahu layarnya sedang direkam.
+            <span className="hidden items-center gap-1.5 rounded-sm bg-white/10 px-2 py-1 text-xs sm:flex" role="status">
+              <span className="size-2 rounded-full bg-merah ring-2 ring-white/70" aria-hidden /> <Monitor className="size-4" /> Layar direkam
+            </span>
+          )}
           {paket.ujian.wajibKamera && <PratinjauKamera videoRef={kamera.videoRef} status={kamera.status} jumlahWajah={kamera.jumlahWajah} />}
           <div
             role="timer"
@@ -272,8 +290,8 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
         <main className="min-w-0">
           {terkunci ? (
             <PenguncianLayar
-              kamera={terkunciKamera}
-              nyalakanKamera={kamera.cobaLagi}
+              jenis={kunci}
+              aksi={kunci === 'kamera' ? kamera.cobaLagi : kunci === 'layar-penuh' ? () => masukLayarPenuh() : layar.mulaiBerbagi}
               jumlahPelanggaran={jumlahPelanggaran}
               maks={paket.ujian.maksPelanggaran}
             />
@@ -401,22 +419,43 @@ function PratinjauKamera({ videoRef, status, jumlahWajah }: {
   );
 }
 
-function PenguncianLayar({ kamera, nyalakanKamera, jumlahPelanggaran, maks }: {
-  kamera: boolean; nyalakanKamera: () => void; jumlahPelanggaran: number; maks: number;
+type JenisKunci = 'kamera' | 'bagikan-layar' | 'salah-pilih' | 'layar-penuh';
+
+const PESAN_KUNCI: Record<JenisKunci, { judul: string; isi: string; tombol: string }> = {
+  'kamera': {
+    judul: 'Kamera harus menyala',
+    isi: 'Ujian ini diawasi kamera. Izinkan akses kamera di browser, lalu tekan tombol di bawah.',
+    tombol: 'Nyalakan kamera',
+  },
+  'bagikan-layar': {
+    judul: 'Bagikan seluruh layar',
+    isi: 'Ujian ini merekam layar secara berkala. Tekan tombol di bawah, pilih "Seluruh layar" (Entire screen), lalu tekan "Bagikan". Soal disembunyikan sampai layar dibagikan; waktu ujian tetap berjalan.',
+    tombol: 'Bagikan seluruh layar',
+  },
+  'salah-pilih': {
+    judul: 'Pilih "Seluruh layar"',
+    isi: 'Yang Anda bagikan hanya satu tab atau jendela. Ujian ini memerlukan seluruh layar. Tekan tombol di bawah dan pilih "Seluruh layar" (Entire screen).',
+    tombol: 'Pilih ulang',
+  },
+  'layar-penuh': {
+    judul: 'Kembali ke layar penuh',
+    isi: 'Soal disembunyikan selama Anda tidak berada di layar penuh. Waktu ujian tetap berjalan.',
+    tombol: 'Kembali ke layar penuh',
+  },
+};
+
+function PenguncianLayar({ jenis, aksi, jumlahPelanggaran, maks }: {
+  jenis: JenisKunci; aksi: () => void; jumlahPelanggaran: number; maks: number;
 }) {
+  const pesan = PESAN_KUNCI[jenis];
+  const Ikon = jenis === 'kamera' ? Camera : jenis === 'layar-penuh' ? ArrowsOut : Monitor;
   return (
     <section className="rounded-lg border border-garis bg-white p-6 text-center sm:p-10" role="alert">
-      {kamera ? <Camera className="mx-auto size-12 text-merah" /> : <ArrowsOut className="mx-auto size-12 text-biru" />}
-      <h2 className="mt-4 text-xl">{kamera ? 'Kamera harus menyala' : 'Kembali ke layar penuh'}</h2>
-      <p className="mx-auto mt-2 max-w-md text-muted-foreground">
-        {kamera
-          ? 'Ujian ini diawasi kamera. Izinkan akses kamera di browser, lalu tekan tombol di bawah.'
-          : 'Soal disembunyikan selama Anda tidak berada di layar penuh. Waktu ujian tetap berjalan.'}
-      </p>
+      <Ikon className={cn('mx-auto size-12', jenis === 'kamera' || jenis === 'salah-pilih' ? 'text-merah' : 'text-biru')} />
+      <h2 className="mt-4 text-xl">{pesan.judul}</h2>
+      <p className="mx-auto mt-2 max-w-md text-muted-foreground">{pesan.isi}</p>
       {maks > 0 && <p className="mt-3 font-semibold text-merah">Pelanggaran tercatat: {jumlahPelanggaran} dari {maks}</p>}
-      <Button size="lg" className="mt-6" onClick={kamera ? nyalakanKamera : () => masukLayarPenuh()}>
-        {kamera ? 'Nyalakan kamera' : 'Kembali ke layar penuh'}
-      </Button>
+      <Button size="lg" className="mt-6" onClick={aksi}>{pesan.tombol}</Button>
     </section>
   );
 }

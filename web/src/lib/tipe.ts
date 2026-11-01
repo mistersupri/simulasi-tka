@@ -8,14 +8,14 @@ export type StatusUjian = 'TERSEDIA' | 'BERLANGSUNG' | 'SELESAI' | 'BELUM_DIBUKA
 export type UjianSiswa = {
   id: string; nama: string; mataPelajaran: string; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; perluToken: boolean; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; wajibAplikasi: boolean; maksPercobaan: number; jumlahSelesai: number; sesiId: string | null; status: StatusUjian;
+  wajibKamera: boolean; wajibAplikasi: boolean; rekamLayar: boolean; maksPercobaan: number; jumlahSelesai: number; sesiId: string | null; status: StatusUjian;
 };
 export type Riwayat = { id: string; namaUjian: string; mataPelajaran: string; tanggal: string; nilai: number | null; tuntas: boolean | null; adaPembahasan: boolean };
 
 export type SoalTampil = { id: string; tipe: 'PG' | 'PGK'; pertanyaan: string; gambar: string | null; opsi: string[] };
 export type PaketUjian = {
   sesiId: string;
-  ujian: { id: string; nama: string; mataPelajaran: string; wajibLayarPenuh: boolean; wajibKamera: boolean; maksPelanggaran: number };
+  ujian: { id: string; nama: string; mataPelajaran: string; wajibLayarPenuh: boolean; wajibKamera: boolean; maksPelanggaran: number; intervalRekamLayar: number };
   soal: SoalTampil[];
   jawaban: Record<string, string>;
   ragu: string[];
@@ -36,7 +36,7 @@ export type HasilSiswa = {
 
 export type JenisPelanggaran =
   | 'KELUAR_LAYAR_PENUH' | 'PINDAH_TAB' | 'WAJAH_TIDAK_TERLIHAT' | 'WAJAH_LEBIH_DARI_SATU'
-  | 'KAMERA_TIDAK_AKTIF' | 'SALIN_TEMPEL' | 'PINTASAN_TERLARANG';
+  | 'KAMERA_TIDAK_AKTIF' | 'SALIN_TEMPEL' | 'PINTASAN_TERLARANG' | 'LAYAR_TIDAK_DIBAGIKAN';
 
 export const LABEL_PELANGGARAN: Record<JenisPelanggaran, string> = {
   KELUAR_LAYAR_PENUH: 'Keluar dari layar penuh',
@@ -46,6 +46,7 @@ export const LABEL_PELANGGARAN: Record<JenisPelanggaran, string> = {
   KAMERA_TIDAK_AKTIF: 'Kamera tidak aktif',
   SALIN_TEMPEL: 'Mencoba menyalin / menempel',
   PINTASAN_TERLARANG: 'Menekan tombol pintasan terlarang',
+  LAYAR_TIDAK_DIBAGIKAN: 'Berhenti membagikan layar',
 };
 
 export type Soal = {
@@ -56,7 +57,7 @@ export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; token: string | null; acakSoal: boolean; acakOpsi: boolean;
   tampilkanNilai: boolean; tampilkanPembahasan: boolean; maksPercobaan: number; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; aktif: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
+  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
 };
 export type Siswa = { id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: string | null };
 export type Pengguna = { id: string; nama: string; username: string; peran: 'ADMIN' | 'GURU'; aktif: boolean; loginTerakhir: string | null };
@@ -66,4 +67,5 @@ export type Hasil = {
   status: StatusHasil; jumlahPelanggaran: number;
 };
 export type Pelanggaran = { id: string; jenis: JenisPelanggaran; waktu: string; foto: string | null; detail: string };
+export type TangkapanLayar = { id: string; waktu: string; berkas: string; pemicu: 'BERKALA' | 'PELANGGARAN'; keterangan: string };
 export type Akun = { nama: string; kelas: string; username: string; password: string };

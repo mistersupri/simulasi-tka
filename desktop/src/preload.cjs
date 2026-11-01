@@ -15,4 +15,6 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   jeda: () => jeda,
   /** Muat ulang server (dipakai halaman galat koneksi). */
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
+  /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */
+  tangkapLayar: () => ipcRenderer.invoke('tka:tangkap-layar'),
 });

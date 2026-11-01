@@ -18,7 +18,7 @@
  */
 const crypto = require('node:crypto');
 const path = require('node:path');
-const { app, BrowserWindow, Menu, ipcMain, screen, session } = require('electron');
+const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session } = require('electron');
 
 const konfigurasi = require('../konfigurasi.json');
 const SERVER = new URL(konfigurasi.server).origin;
@@ -187,6 +187,39 @@ ipcMain.handle('tka:izin-keluar', async (e, username, sandi) => {
 
 ipcMain.on('tka:batal-keluar', (e) => {
   if (e.sender === jendelaKeluar?.webContents) jendelaKeluar.close();
+});
+
+/**
+ * Tangkapan seluruh layar untuk fitur "rekam layar" ujian.
+ * Jendela ujian memakai setContentProtection, yang membuatnya TIDAK ikut terekam.
+ * Agar pengawas melihat isi layar sebenarnya (ujian + jendela lain di atasnya),
+ * perlindungan dimatikan sesaat selama pengambilan lalu dinyalakan kembali.
+ */
+let sedangMenangkap = false;
+ipcMain.handle('tka:tangkap-layar', async (e) => {
+  if (e.sender !== jendela?.webContents || sedangMenangkap) return null;
+  sedangMenangkap = true;
+  const lindungi = (aktif) => {
+    if (jendela && !jendela.isDestroyed()) jendela.setContentProtection(aktif);
+    if (jendelaKeluar && !jendelaKeluar.isDestroyed()) jendelaKeluar.setContentProtection(aktif);
+  };
+  try {
+    const layar = screen.getPrimaryDisplay();
+    const lebar = Math.min(1280, layar.size.width);
+    const tinggi = Math.round((layar.size.height * lebar) / layar.size.width);
+    lindungi(false);
+    await new Promise((r) => setTimeout(r, 150));
+    const sumber = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: lebar, height: tinggi } });
+    const utama = sumber.find((s) => s.display_id === String(layar.id)) ?? sumber[0];
+    if (!utama || utama.thumbnail.isEmpty()) return null;
+    return new Uint8Array(utama.thumbnail.toJPEG(60));
+  } catch (err) {
+    console.error('Tangkapan layar gagal', err);
+    return null;
+  } finally {
+    lindungi(true);
+    sedangMenangkap = false;
+  }
 });
 
 ipcMain.on('tka:coba-lagi', (e) => {

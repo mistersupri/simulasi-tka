@@ -29,6 +29,7 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 | Tidak bisa blok/salin | Teks soal tidak bisa diblok. Salin, potong, tempel, klik kanan, seret, Ctrl+A/C/V/P/S/U, F12, dan PrintScreen dicegah dan dicatat. |
 | Pindah tab/aplikasi | Halaman tersembunyi atau jendela kehilangan fokus dicatat. |
 | Deteksi wajah | Kamera memeriksa wajah setiap detik di perangkat siswa. Tidak ada wajah selama ±4 detik, atau lebih dari satu wajah selama ±3 detik, dicatat bersama **foto bukti kecil**. Video tidak direkam dan tidak dikirim. |
+| Rekam layar | Tangkapan layar berkala (30 detik sampai 5 menit, diatur per ujian) dan sesaat setelah setiap pelanggaran, sehingga terlihat apa yang dibuka siswa saat pindah tab. Di browser, siswa wajib membagikan **seluruh layar**; berhenti berbagi menyembunyikan soal dan dicatat. Di aplikasi Windows layar diambil langsung tanpa dialog. Pengawas melihatnya di Monitor dan detail hasil. |
 | Kirim otomatis | Ujian dikirim otomatis pada pelanggaran ke-N (diatur guru; 0 = hanya dicatat). |
 | Wajib aplikasi | Ujian bisa dibatasi hanya lewat aplikasi ujian Windows ([`desktop/`](../desktop/README.md)), yang mengunci layar dan memblokir tangkapan layar. Butuh `KUNCI_APLIKASI` di server. |
 | Monitor | Guru melihat progres, sisa waktu, jumlah pelanggaran, dan foto bukti secara langsung; bisa menambah waktu, mengirim paksa, atau mereset. |
@@ -39,6 +40,13 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 > - iPhone/iPad tidak mendukung layar penuh untuk halaman web. Di perangkat itu,
 >   pindah aplikasi tetap tercatat, tetapi keluar layar penuh tidak bisa dideteksi.
 > - Deteksi wajah butuh kamera dan **HTTPS** (atau `localhost`).
+> - Rekam layar di browser butuh komputer/laptop dengan Chrome, Edge, atau Firefox terbaru. HP dan tablet
+>   tidak bisa membagikan layar, sehingga ujian yang merekam layar tidak bisa dikerjakan di sana.
+> - **Privasi:** tangkapan layar bisa memuat hal pribadi di layar siswa. Beri tahu siswa dan orang tua
+>   sebelum dipakai, minta siswa menutup aplikasi pribadi, dan atur lama simpan di menu Pengaturan
+>   (bawaan 30 hari, setelah itu dihapus otomatis). Siswa selalu melihat penanda "Layar direkam" selama ujian.
+>   Satu tangkapan halaman ujian berukuran sekitar 50 KB (lebih besar bila layar penuh gambar, hingga ±150 KB);
+>   30 siswa x 90 menit dengan interval 1 menit menghasilkan sekitar 130 sampai 400 MB.
 > - Perangkat yang sangat lambat mungkin perlu beberapa detik untuk memuat model wajah
 >   (±15 MB WebAssembly, di-cache browser setelah pertama kali).
 

@@ -53,6 +53,7 @@ rutAdminSistem.put('/pengaturan', butuhStaf('ADMIN'), async (req, res) => {
     PENGUMUMAN: z.string().trim().max(1000),
     KKM: z.coerce.number().int().min(0, 'KKM harus 0 sampai 100.').max(100, 'KKM harus 0 sampai 100.').transform(String),
     SISWA_BOLEH_GANTI_PASSWORD: z.boolean().transform((v) => (v ? 'YA' : 'TIDAK')),
+    SIMPAN_TANGKAPAN_HARI: z.coerce.number().int().min(1, 'Lama simpan tangkapan layar 1 sampai 365 hari.').max(365, 'Lama simpan tangkapan layar 1 sampai 365 hari.').default(30).transform(String),
   }).parse(req.body);
   await simpanPengaturan(d);
   await catatLog(req.staf!, 'UBAH_PENGATURAN');

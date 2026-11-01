@@ -1,8 +1,9 @@
-import { ArrowClockwise, Camera } from '@phosphor-icons/react';
+import { ArrowClockwise, Camera, Monitor as IkonLayar } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { KepalaHalaman } from '@/components/admin';
+import { GaleriLayar, urlLayar } from '@/components/GaleriLayar';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { Badge } from '@/components/ui/badge';
@@ -11,13 +12,14 @@ import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/
 import { Progress } from '@/components/ui/progress';
 import { api, pesanGalat } from '@/lib/api';
 import { formatDurasi, formatJam, formatTanggal } from '@/lib/format';
-import { LABEL_PELANGGARAN, type Pelanggaran } from '@/lib/tipe';
+import { LABEL_PELANGGARAN, type Pelanggaran, type TangkapanLayar } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
 
 type Sesi = {
   id: string; nama: string; kelas: string; username: string; namaUjian: string; jumlahSoal: number; terjawab: number; ragu: number;
   mulai: string; sisaDetik: number | null; terakhirAktif: string; jumlahPelanggaran: number; maksPelanggaran: number;
   pelanggaranTerakhir: Pelanggaran | null;
+  tangkapanTerakhir: TangkapanLayar | null;
 };
 
 const urlFoto = (nama: string) => `/api/admin/berkas/pelanggaran/${nama}`;
@@ -26,6 +28,7 @@ export default function Monitor() {
   const qc = useQueryClient();
   const [konfirmasi, dialog] = useKonfirmasi();
   const [lihat, setLihat] = useState<Sesi | null>(null);
+  const [lihatLayar, setLihatLayar] = useState<Sesi | null>(null);
   const q = useQuery({
     queryKey: ['monitor'],
     queryFn: () => api.get<{ sekarang: string; sesi: Sesi[] }>('/admin/monitor'),
@@ -69,6 +72,14 @@ export default function Monitor() {
                     </Badge>
                   )}
                 </div>
+                {s.tangkapanTerakhir && (
+                  <button type="button" onClick={() => setLihatLayar(s)} className="mt-3 block w-full overflow-hidden rounded-md border border-garis text-left hover:border-biru">
+                    <img src={urlLayar(s.tangkapanTerakhir.berkas)} alt={`Layar terakhir ${s.nama}`} className="aspect-video w-full bg-tinta object-cover" />
+                    <span className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
+                      <IkonLayar className="size-3.5" /> Layar {formatTanggal(s.tangkapanTerakhir.waktu)} · lihat semua
+                    </span>
+                  </button>
+                )}
                 {s.pelanggaranTerakhir && (
                   <button type="button" onClick={() => setLihat(s)} className="mt-3 flex w-full items-center gap-3 rounded-md bg-merah-muda p-2 text-left text-sm hover:brightness-95">
                     {s.pelanggaranTerakhir.foto
@@ -92,6 +103,7 @@ export default function Monitor() {
         </ul>
       )}
       <DialogPelanggaran sesi={lihat} tutup={() => setLihat(null)} />
+      <DialogLayar sesi={lihatLayar} tutup={() => setLihatLayar(null)} />
       {dialog}
     </>
   );
@@ -128,6 +140,23 @@ function DialogPelanggaran({ sesi, tutup }: { sesi: Sesi | null; tutup: () => vo
       <DialogContent>
         <DialogHeader><DialogTitle>Catatan pelanggaran: {sesi?.nama}</DialogTitle></DialogHeader>
         <DialogBody>{q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} /> : <DaftarPelanggaran daftar={q.data} />}</DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialogLayar({ sesi, tutup }: { sesi: Sesi | null; tutup: () => void }) {
+  const q = useQuery({
+    queryKey: ['layar', sesi?.id],
+    queryFn: () => api.get<TangkapanLayar[]>(`/admin/sesi/${sesi!.id}/layar`),
+    enabled: !!sesi,
+    refetchInterval: 15_000,
+  });
+  return (
+    <Dialog open={!!sesi} onOpenChange={(b) => !b && tutup()}>
+      <DialogContent lebar>
+        <DialogHeader><DialogTitle>Rekaman layar: {sesi?.nama}</DialogTitle></DialogHeader>
+        <DialogBody>{q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} /> : <GaleriLayar daftar={q.data} />}</DialogBody>
       </DialogContent>
     </Dialog>
   );
