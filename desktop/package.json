@@ -1,0 +1,52 @@
+{
+  "name": "simulasi-tka-ujian",
+  "productName": "Ujian TKA",
+  "version": "1.0.0",
+  "description": "Aplikasi ujian Simulasi TKA untuk komputer lab (Windows)",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "konfigurasi": "node scripts/siapkan-konfigurasi.mjs",
+    "start": "npm run konfigurasi && electron .",
+    "build:win": "npm run konfigurasi && electron-builder --win nsis --x64 --publish never",
+    "build:linux-dir": "npm run konfigurasi && electron-builder --linux dir --publish never"
+  },
+  "build": {
+    "appId": "id.sch.simulasitka.ujian",
+    "productName": "Ujian TKA",
+    "files": [
+      "src/**",
+      "konfigurasi.json",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ujian TKA",
+      "artifactName": "Ujian-TKA-Setup-${version}.exe"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    },
+    "publish": []
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "author": "Simulasi TKA"
+}

@@ -1,4 +1,4 @@
-import { ArrowsClockwise, ArrowsOut, Camera, ChartBar, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
+import { ArrowsClockwise, ArrowsOut, Camera, ChartBar, Desktop, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ import type { Ujian } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
 import { DialogAnalisis } from './Hasil';
 
-type Data = { ujian: Ujian[]; daftarMapel: string[] };
+type Data = { ujian: Ujian[]; daftarMapel: string[]; aplikasiTersedia: boolean };
 
 function statusJadwal(u: Ujian) {
   const sekarang = Date.now();
@@ -81,6 +81,7 @@ export default function HalamanUjian() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {u.wajibLayarPenuh && <Badge><ArrowsOut weight="bold" /> Layar penuh</Badge>}
                   {u.wajibKamera && <Badge><Camera weight="bold" /> Kamera</Badge>}
+                  {u.wajibAplikasi && <Badge><Desktop weight="bold" /> Hanya aplikasi Windows</Badge>}
                   {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
                 {kekurangan.length > 0 && (
@@ -101,23 +102,23 @@ export default function HalamanUjian() {
           })}
         </ul>
       )}
-      {form && <FormUjian ujian={form === 'baru' ? null : form} daftarMapel={q.data?.daftarMapel ?? []} tutup={() => setForm(null)} />}
+      {form && <FormUjian ujian={form === 'baru' ? null : form} daftarMapel={q.data?.daftarMapel ?? []} aplikasiTersedia={!!q.data?.aplikasiTersedia} tutup={() => setForm(null)} />}
       <DialogAnalisis ujianId={analisis} tutup={() => setAnalisis(null)} />
       {dialog}
     </>
   );
 }
 
-function Saklar({ id, label, ket, checked, ubah }: { id: string; label: string; ket?: string; checked: boolean; ubah: (v: boolean) => void }) {
+function Saklar({ id, label, ket, checked, ubah, disabled }: { id: string; label: string; ket?: string; checked: boolean; ubah: (v: boolean) => void; disabled?: boolean }) {
   return (
     <div className="flex items-start gap-3">
-      <Switch id={id} checked={checked} onCheckedChange={ubah} className="mt-0.5" />
+      <Switch id={id} checked={checked} onCheckedChange={ubah} disabled={disabled} className="mt-0.5" />
       <div><Label htmlFor={id}>{label}</Label>{ket && <p className="text-xs text-muted-foreground">{ket}</p>}</div>
     </div>
   );
 }
 
-function FormUjian({ ujian, daftarMapel, tutup }: { ujian: Ujian | null; daftarMapel: string[]; tutup: () => void }) {
+function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Ujian | null; daftarMapel: string[]; aplikasiTersedia: boolean; tutup: () => void }) {
   const qc = useQueryClient();
   const [galat, setGalat] = useState('');
   const [d, setD] = useState({
@@ -137,6 +138,7 @@ function FormUjian({ ujian, daftarMapel, tutup }: { ujian: Ujian | null; daftarM
     wajibLayarPenuh: ujian?.wajibLayarPenuh ?? true,
     wajibKamera: ujian?.wajibKamera ?? false,
     maksPelanggaran: String(ujian?.maksPelanggaran ?? 5),
+    wajibAplikasi: ujian?.wajibAplikasi ?? false,
     aktif: ujian?.aktif ?? true,
   });
   const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
@@ -186,6 +188,13 @@ function FormUjian({ ujian, daftarMapel, tutup }: { ujian: Ujian | null; daftarM
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <Saklar id="u-penuh" label="Wajib layar penuh" ket="Keluar layar penuh atau pindah aplikasi dicatat; soal disembunyikan sampai kembali." checked={d.wajibLayarPenuh} ubah={(v) => ubah('wajibLayarPenuh', v)} />
                 <Saklar id="u-kamera" label="Deteksi wajah dengan kamera" ket="Mencatat bila wajah tidak terlihat atau ada lebih dari satu wajah, disertai foto bukti." checked={d.wajibKamera} ubah={(v) => ubah('wajibKamera', v)} />
+                <Saklar
+                  id="u-aplikasi" label="Wajib lewat aplikasi ujian Windows"
+                  ket={aplikasiTersedia
+                    ? 'Siswa tidak bisa mengerjakan dari browser biasa atau HP. Aplikasi mengunci layar dan memblokir tangkapan layar.'
+                    : 'Belum bisa dipakai: isi KUNCI_APLIKASI di server lalu buat installer dengan kunci yang sama.'}
+                  checked={d.wajibAplikasi} ubah={(v) => ubah('wajibAplikasi', v)} disabled={!aplikasiTersedia && !d.wajibAplikasi}
+                />
                 <div className="space-y-1.5">
                   <Label htmlFor="u-maks-langgar">Kirim otomatis pada pelanggaran ke-</Label>
                   <Input id="u-maks-langgar" type="number" min={0} value={d.maksPelanggaran} onChange={(e) => ubah('maksPelanggaran', e.target.value)} className="max-w-32" />

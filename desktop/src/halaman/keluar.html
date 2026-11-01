@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Izin pengawas</title>
+  <link rel="stylesheet" href="gaya.css">
+</head>
+<body>
+  <form class="kartu" id="form">
+    <h1>Izin pengawas</h1>
+    <p class="redup">Ujian sedang berjalan. Aplikasi hanya bisa ditutup dengan akun guru atau admin. Jawaban siswa tetap tersimpan dan bisa dilanjutkan.</p>
+    <label for="username">Username pengawas</label>
+    <input id="username" autocomplete="off" autocapitalize="none" required>
+    <label for="sandi">Kata sandi</label>
+    <input id="sandi" type="password" autocomplete="off" required>
+    <div class="galat" id="galat" role="alert"></div>
+    <div class="tombol-baris">
+      <button type="button" id="batal">Batal</button>
+      <button type="submit" class="utama" id="kirim">Tutup aplikasi</button>
+    </div>
+  </form>
+  <script src="keluar.js"></script>
+</body>
+</html>

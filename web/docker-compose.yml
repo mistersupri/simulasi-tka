@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql://tka:${DB_PASSWORD}@db:5432/simulasi_tka
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      KUNCI_APLIKASI: ${KUNCI_APLIKASI:-}
     ports:
       - '${PORT:-3000}:3000'
     volumes:

@@ -130,6 +130,7 @@ model Ujian {
   wajibLayarPenuh     Boolean   @default(true)
   wajibKamera         Boolean   @default(false)
   maksPelanggaran     Int       @default(5)  // 0 = tidak dikirim otomatis
+  wajibAplikasi       Boolean   @default(false) // hanya lewat aplikasi ujian Windows
   aktif               Boolean   @default(true)
   dibuat              DateTime  @default(now())
   sesi                SesiUjian[]

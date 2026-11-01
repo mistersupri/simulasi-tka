@@ -30,6 +30,7 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 | Pindah tab/aplikasi | Halaman tersembunyi atau jendela kehilangan fokus dicatat. |
 | Deteksi wajah | Kamera memeriksa wajah setiap detik di perangkat siswa. Tidak ada wajah selama ±4 detik, atau lebih dari satu wajah selama ±3 detik, dicatat bersama **foto bukti kecil**. Video tidak direkam dan tidak dikirim. |
 | Kirim otomatis | Ujian dikirim otomatis pada pelanggaran ke-N (diatur guru; 0 = hanya dicatat). |
+| Wajib aplikasi | Ujian bisa dibatasi hanya lewat aplikasi ujian Windows ([`desktop/`](../desktop/README.md)), yang mengunci layar dan memblokir tangkapan layar. Butuh `KUNCI_APLIKASI` di server. |
 | Monitor | Guru melihat progres, sisa waktu, jumlah pelanggaran, dan foto bukti secara langsung; bisa menambah waktu, mengirim paksa, atau mereset. |
 
 > **Batasan yang perlu diketahui sekolah.** Pengawasan di browser membuat kecurangan

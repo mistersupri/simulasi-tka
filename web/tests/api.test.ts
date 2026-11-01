@@ -2,6 +2,7 @@ import request from 'supertest';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../server/db.ts';
+import { tandaAplikasi } from '../server/lib/aplikasi.ts';
 import { app, jawabanBenar, kosongkanDb, siapkan } from './bantu.ts';
 
 // PNG 1x1 piksel yang sah.
@@ -273,5 +274,41 @@ describe('status login', () => {
   it('tanpa login: profil null dengan status 200', async () => {
     const r = await request(app).get('/api/auth/saya?jenis=staf').expect(200);
     expect(r.body.profil).toBeNull();
+  });
+});
+
+describe('aplikasi ujian Windows', () => {
+  beforeEach(kosongkanDb);
+  const menit = () => Math.floor(Date.now() / 60000);
+
+  it('ujian wajib aplikasi ditolak dari browser, diterima dengan tanda aplikasi yang sah', async () => {
+    const { admin, siswa } = await siapkan();
+    const daftar = (await admin.get('/api/admin/ujian').expect(200)).body;
+    expect(daftar.aplikasiTersedia).toBe(true);
+    const { id } = (await admin.post('/api/admin/ujian').send({ nama: 'Lab', mataPelajaran: 'Matematika', kelas: '6', wajibAplikasi: true }).expect(200)).body;
+
+    const beranda = (await siswa.get('/api/siswa/beranda').expect(200)).body;
+    expect(beranda.diAplikasi).toBe(false);
+    expect(beranda.ujian.find((u: { id: string }) => u.id === id).wajibAplikasi).toBe(true);
+
+    const tolak = await siswa.post(`/api/siswa/ujian/${id}/mulai`).send({}).expect(403);
+    expect(tolak.body.pesan).toMatch(/aplikasi ujian/);
+    await siswa.post(`/api/siswa/ujian/${id}/mulai`).set('X-TKA-Aplikasi', tandaAplikasi('kunci-salah', menit())).send({}).expect(403);
+    await siswa.post(`/api/siswa/ujian/${id}/mulai`).set('X-TKA-Aplikasi', tandaAplikasi('kunci-rahasia-tes', menit() - 30)).send({}).expect(403);
+
+    const sah = tandaAplikasi('kunci-rahasia-tes', menit());
+    expect((await siswa.get('/api/siswa/beranda').set('X-TKA-Aplikasi', sah)).body.diAplikasi).toBe(true);
+    const paket = (await siswa.post(`/api/siswa/ujian/${id}/mulai`).set('X-TKA-Aplikasi', sah).send({}).expect(200)).body;
+    // Melanjutkan dari browser biasa juga ditolak.
+    await siswa.get(`/api/siswa/sesi/${paket.sesiId}`).expect(403);
+    await siswa.get(`/api/siswa/sesi/${paket.sesiId}`).set('X-TKA-Aplikasi', sah).expect(200);
+  });
+
+  it('izin keluar hanya dengan akun pengawas yang benar', async () => {
+    await siapkan();
+    await request(app).post('/api/aplikasi/izin-keluar').send({ username: 'admin', password: 'salah' }).expect(401);
+    await request(app).post('/api/aplikasi/izin-keluar').send({ username: 'uji_tka', password: 'LatihanTKA2026!' }).expect(401);
+    await request(app).post('/api/aplikasi/izin-keluar').send({ username: 'admin', password: 'admin123' }).expect(200);
+    expect(await prisma.logAktivitas.count({ where: { aksi: 'IZIN_KELUAR_APLIKASI' } })).toBe(1);
   });
 });

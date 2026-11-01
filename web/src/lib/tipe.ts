@@ -8,7 +8,7 @@ export type StatusUjian = 'TERSEDIA' | 'BERLANGSUNG' | 'SELESAI' | 'BELUM_DIBUKA
 export type UjianSiswa = {
   id: string; nama: string; mataPelajaran: string; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; perluToken: boolean; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPercobaan: number; jumlahSelesai: number; sesiId: string | null; status: StatusUjian;
+  wajibKamera: boolean; wajibAplikasi: boolean; maksPercobaan: number; jumlahSelesai: number; sesiId: string | null; status: StatusUjian;
 };
 export type Riwayat = { id: string; namaUjian: string; mataPelajaran: string; tanggal: string; nilai: number | null; tuntas: boolean | null; adaPembahasan: boolean };
 
@@ -56,7 +56,7 @@ export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; token: string | null; acakSoal: boolean; acakOpsi: boolean;
   tampilkanNilai: boolean; tampilkanPembahasan: boolean; maksPercobaan: number; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPelanggaran: number; aktif: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
+  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; aktif: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
 };
 export type Siswa = { id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: string | null };
 export type Pengguna = { id: string; nama: string; username: string; peran: 'ADMIN' | 'GURU'; aktif: boolean; loginTerakhir: string | null };

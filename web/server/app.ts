@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { config } from './config.ts';
 import { galat, penanganGalat } from './lib/galat.ts';
 import { rutAdmin } from './routes/admin/index.ts';
+import { rutAplikasi } from './routes/aplikasi.ts';
 import { rutAuth } from './routes/auth.ts';
 import { rutPublik } from './routes/publik.ts';
 import { rutSiswa } from './routes/siswa.ts';
@@ -46,6 +47,7 @@ export function buatApp({ folderKlien }: { folderKlien?: string } = {}) {
   });
   app.use('/api', rutPublik);
   app.use('/api/auth', rutAuth);
+  app.use('/api/aplikasi', rutAplikasi);
   app.use('/api/siswa', rutSiswa);
   app.use('/api/admin', rutAdmin);
   app.use('/api', (_req) => {

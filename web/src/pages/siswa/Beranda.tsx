@@ -1,5 +1,5 @@
 import {
-  ArrowsOut, Camera, CheckCircle, Clock, Key, ListNumbers, Megaphone, SignOut,
+  ArrowsOut, Camera, CheckCircle, Clock, Desktop, Key, ListNumbers, Megaphone, Power, SignOut,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { useProfilSiswa } from '@/hooks/useProfil';
 import { layarPenuhDidukung, masukLayarPenuh } from '@/hooks/usePengawasan';
 import { api, ApiError, pesanGalat } from '@/lib/api';
+import { aplikasi } from '@/lib/aplikasi';
 import { formatTanggal } from '@/lib/format';
 import type { PaketUjian, ProfilSiswa, Riwayat, StatusUjian, UjianSiswa } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
@@ -81,9 +82,14 @@ function LoginSiswa() {
             Lupa kata sandi? Minta guru mengatur ulang.
           </p>
         </form>
-        <p className="mt-6 text-center text-sm">
-          <Link to="/admin" className="font-bold text-jeruk-tua underline-offset-4 hover:underline">Masuk sebagai guru atau admin</Link>
-        </p>
+        {aplikasi ? (
+          // Aplikasi ujian dipakai siswa di lab: tidak ada tautan ke ruang guru.
+          <Button variant="ghost" className="mt-4 w-full" onClick={() => aplikasi?.keluar()}><Power weight="bold" /> Tutup aplikasi</Button>
+        ) : (
+          <p className="mt-6 text-center text-sm">
+            <Link to="/admin" className="font-bold text-jeruk-tua underline-offset-4 hover:underline">Masuk sebagai guru atau admin</Link>
+          </p>
+        )}
       </section>
     </main>
   );
@@ -93,7 +99,7 @@ function LoginSiswa() {
 // Beranda
 // ------------------------------------------------------------------
 
-type DataBeranda = { pengumuman: string; ujian: UjianSiswa[]; riwayat: Riwayat[] };
+type DataBeranda = { pengumuman: string; diAplikasi: boolean; ujian: UjianSiswa[]; riwayat: Riwayat[] };
 
 const STATUS: Record<StatusUjian, { label: string; varian: 'daun' | 'matahari' | 'default' | 'bata' | 'jeruk' }> = {
   TERSEDIA: { label: 'Bisa dikerjakan', varian: 'daun' },
@@ -131,6 +137,11 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
             <Button variant="outline" size="sm" onClick={() => keluar.mutate()} disabled={keluar.isPending}>
               <SignOut weight="bold" /> Keluar
             </Button>
+            {aplikasi && (
+              <Button variant="ghost" size="sm" onClick={() => aplikasi?.keluar()} aria-label="Tutup aplikasi">
+                <Power weight="bold" /> <span className="hidden sm:inline">Tutup aplikasi</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -153,7 +164,7 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
             : !data.data.ujian.length ? <Kosong judul="Belum ada ujian untuk kelasmu.">Tunggu informasi dari gurumu, lalu tekan muat ulang.</Kosong>
             : (
               <div className="grid gap-5 sm:grid-cols-2">
-                {data.data.ujian.map((u) => <KartuUjian key={u.id} ujian={u} pilih={() => setDipilih(u)} />)}
+                {data.data.ujian.map((u) => <KartuUjian key={u.id} ujian={u} diAplikasi={data.data.diAplikasi} pilih={() => setDipilih(u)} />)}
               </div>
             )}
         </div>
@@ -170,9 +181,10 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
   );
 }
 
-function KartuUjian({ ujian: u, pilih }: { ujian: UjianSiswa; pilih: () => void }) {
-  const s = STATUS[u.status];
-  const bisa = u.status === 'TERSEDIA' || u.status === 'BERLANGSUNG';
+function KartuUjian({ ujian: u, diAplikasi, pilih }: { ujian: UjianSiswa; diAplikasi: boolean; pilih: () => void }) {
+  const perluAplikasi = u.wajibAplikasi && !diAplikasi;
+  const s = perluAplikasi && u.status === 'TERSEDIA' ? { label: 'Khusus komputer lab', varian: 'jeruk' as const } : STATUS[u.status];
+  const bisa = (u.status === 'TERSEDIA' || u.status === 'BERLANGSUNG') && !perluAplikasi;
   return (
     <article className={cn('flex flex-col rounded-xl bg-white p-5', bisa ? 'stiker' : 'border-2 border-border')}>
       <div className="flex items-center justify-between gap-2">
@@ -185,6 +197,7 @@ function KartuUjian({ ujian: u, pilih }: { ujian: UjianSiswa; pilih: () => void 
         <li className="flex items-center gap-2"><Clock weight="bold" className="size-4" /> {u.durasiMenit ? `${u.durasiMenit} menit` : 'Tanpa batas waktu'}</li>
         {u.wajibLayarPenuh && <li className="flex items-center gap-2"><ArrowsOut weight="bold" className="size-4" /> Layar penuh</li>}
         {u.wajibKamera && <li className="flex items-center gap-2"><Camera weight="bold" className="size-4" /> Diawasi kamera</li>}
+        {u.wajibAplikasi && <li className="flex items-center gap-2"><Desktop weight="bold" className="size-4" /> Hanya lewat aplikasi ujian</li>}
         {(u.waktuMulai || u.waktuSelesai) && (
           <li className="text-muted-foreground">
             {u.waktuMulai && <>Dibuka {formatTanggal(u.waktuMulai)}</>}
@@ -196,6 +209,10 @@ function KartuUjian({ ujian: u, pilih }: { ujian: UjianSiswa; pilih: () => void 
       <div className="mt-5 flex-1" />
       {u.status === 'SELESAI' ? (
         <p className="flex items-center gap-2 font-bold text-daun"><CheckCircle weight="fill" className="size-5" /> Sudah kamu kerjakan</p>
+      ) : perluAplikasi ? (
+        <p className="flex items-start gap-2 rounded-md bg-jeruk-muda px-3 py-2.5 text-sm font-bold text-jeruk-tua">
+          <Desktop weight="bold" className="mt-0.5 size-5 shrink-0" /> Kerjakan di komputer lab sekolah lewat aplikasi Ujian TKA.
+        </p>
       ) : (
         <Button variant={u.status === 'BERLANGSUNG' ? 'matahari' : 'default'} size="lg" disabled={!bisa} onClick={pilih}>
           {u.status === 'BERLANGSUNG' ? 'Lanjutkan ujian' : bisa ? 'Mulai ujian' : s.label}

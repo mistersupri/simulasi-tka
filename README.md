@@ -9,6 +9,8 @@ file ekspor disimpan di **Google Drive**. Tidak perlu server atau hosting berbay
 > - **Versi server** (folder [`web/`](web/README.md)): Vite + React + Express + PostgreSQL (Prisma),
 >   dengan desain baru, mode layar penuh, anti salin, dan deteksi wajah saat ujian.
 >   Data versi Google Spreadsheet bisa dipindahkan lewat menu Pengaturan.
+> - **Aplikasi ujian Windows** (folder [`desktop/`](desktop/README.md)): Electron, mode kiosk untuk komputer lab,
+>   memblokir tangkapan layar, dan alamat server tertanam di installer. Dipakai bersama versi server.
 
 ## Fitur
 

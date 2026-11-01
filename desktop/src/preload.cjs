@@ -1,0 +1,18 @@
+// Jembatan untuk halaman di jendela utama (server sekolah dan halaman lokal galat/monitor).
+// Hanya tiga hal yang dibuka; tidak ada akses Node.js ke halaman.
+const { contextBridge, ipcRenderer } = require('electron');
+
+let jeda = false;
+ipcRenderer.on('tka:jeda', (_e, aktif) => {
+  jeda = !!aktif;
+});
+
+contextBridge.exposeInMainWorld('aplikasiTka', {
+  versi: (process.argv.find((a) => a.startsWith('--tka-versi=')) ?? '').split('=')[1] ?? '',
+  /** Tutup aplikasi; saat ujian berjalan aplikasi meminta akun pengawas. */
+  keluar: () => ipcRenderer.send('tka:minta-keluar'),
+  /** true selama jendela kata sandi pengawas terbuka: pengawasan halaman tidak mencatat. */
+  jeda: () => jeda,
+  /** Muat ulang server (dipakai halaman galat koneksi). */
+  cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
+});

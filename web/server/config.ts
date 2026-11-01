@@ -14,4 +14,8 @@ export const config = {
   lamaKunciLoginMenit: 5,
   panjangPasswordMin: 6,
   ukuranGambarMaks: 5 * 1024 * 1024,
+  // Kunci bersama dengan aplikasi ujian Windows (desktop/). Kosong = fitur "wajib aplikasi" mati.
+  kunciAplikasi: process.env.KUNCI_APLIKASI ?? '',
+  // Selisih jam komputer siswa & server yang masih diterima (menit).
+  toleransiJamAplikasiMenit: 10,
 };

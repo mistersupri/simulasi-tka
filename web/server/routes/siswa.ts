@@ -1,6 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { prisma, type JenisPelanggaran, type SesiUjian, type Ujian } from '../db.ts';
+import { dariAplikasi } from '../lib/aplikasi.ts';
 import { simpanGambar, unggah } from '../lib/berkas.ts';
 import { galat } from '../lib/galat.ts';
 import {
@@ -23,6 +24,12 @@ function statusUjian(u: Ujian, jumlahSelesai: number, berjalan: boolean): Status
   if (u.waktuMulai && sekarang < u.waktuMulai.getTime()) return 'BELUM_DIBUKA';
   if (u.waktuSelesai && sekarang > u.waktuSelesai.getTime()) return 'DITUTUP';
   return 'TERSEDIA';
+}
+
+const PESAN_WAJIB_APLIKASI = 'Ujian ini hanya bisa dikerjakan lewat aplikasi ujian sekolah di komputer lab.';
+
+function pastikanAplikasi(req: Request, ujian: Ujian) {
+  if (ujian.wajibAplikasi && !dariAplikasi(req)) throw galat(403, PESAN_WAJIB_APLIKASI);
 }
 
 const soalAktifUntuk = (mataPelajaran: string, kelas: string) =>
@@ -59,6 +66,7 @@ rutSiswa.get('/beranda', async (req, res) => {
       perluToken: !!u.token,
       wajibLayarPenuh: u.wajibLayarPenuh,
       wajibKamera: u.wajibKamera,
+      wajibAplikasi: u.wajibAplikasi,
       maksPercobaan: u.maksPercobaan,
       jumlahSelesai: selesai,
       sesiId: sesi?.id ?? null,
@@ -82,7 +90,7 @@ rutSiswa.get('/beranda', async (req, res) => {
     };
   });
 
-  res.json({ pengumuman: pengaturan.PENGUMUMAN, ujian, riwayat });
+  res.json({ pengumuman: pengaturan.PENGUMUMAN, diAplikasi: dariAplikasi(req), ujian, riwayat });
 });
 
 async function paketUjian(sesi: SesiUjian, ujian: Ujian) {
@@ -116,6 +124,7 @@ rutSiswa.post('/ujian/:ujianId/mulai', async (req, res) => {
 
   const ujian = await prisma.ujian.findUnique({ where: { id: String(req.params.ujianId) } });
   if (!ujian || !ujian.aktif || !kelasCocok(ujian.kelas, siswa.kelas)) throw galat(404, 'Ujian tidak ditemukan.');
+  pastikanAplikasi(req, ujian);
 
   // Lanjutkan ujian yang belum selesai (mis. koneksi putus).
   const berjalan = await prisma.sesiUjian.findFirst({ where: { siswaId: siswa.id, ujianId: ujian.id, status: 'BERLANGSUNG' } });
@@ -158,6 +167,7 @@ async function sesiMilik(req: Request) {
 rutSiswa.get('/sesi/:sesiId', async (req, res) => {
   const sesi = await sesiMilik(req);
   if (sesi.status !== 'BERLANGSUNG') throw galat(409, 'Ujian ini sudah selesai.');
+  pastikanAplikasi(req, sesi.ujian);
   res.json(await paketUjian(sesi, sesi.ujian));
 });
 

@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { prisma, type Hasil } from '../../db.ts';
 import { kirimBerkas } from '../../lib/berkas.ts';
+import { config } from '../../config.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
 import {
@@ -27,6 +28,8 @@ rutAdminUjian.get('/ujian', async (_req, res) => {
   ]);
   const jumlahPeserta = new Map(peserta.map((p) => [p.ujianId, p._count]));
   res.json({
+    // Fitur "wajib aplikasi" hanya bisa dipakai bila server punya KUNCI_APLIKASI.
+    aplikasiTersedia: !!config.kunciAplikasi,
     daftarMapel: [...new Set(soal.map((s) => s.mataPelajaran))].sort(),
     ujian: ujian.map((u) => {
       const cocok = soal.filter((s) => s.mataPelajaran.toLowerCase() === u.mataPelajaran.toLowerCase());
@@ -57,7 +60,10 @@ const skemaUjian = z.object({
   wajibLayarPenuh: z.boolean().default(true),
   wajibKamera: z.boolean().default(false),
   maksPelanggaran: z.coerce.number().int().min(0).default(5),
+  wajibAplikasi: z.boolean().default(false),
   aktif: z.boolean().default(true),
+}).refine((d) => !d.wajibAplikasi || !!config.kunciAplikasi, {
+  message: 'Server belum diatur untuk aplikasi Windows (KUNCI_APLIKASI kosong).',
 }).refine((d) => !d.waktuMulai || !d.waktuSelesai || d.waktuSelesai > d.waktuMulai, {
   message: 'Waktu selesai harus setelah waktu mulai.',
 });

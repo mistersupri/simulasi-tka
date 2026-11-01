@@ -13,6 +13,7 @@
  *    tidak ada wajah atau lebih dari satu wajah beberapa detik berturut-turut
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { aplikasi } from '@/lib/aplikasi';
 import type { JenisPelanggaran } from '@/lib/tipe';
 
 export type Lapor = (jenis: JenisPelanggaran, detail?: string, foto?: Blob | null) => void;
@@ -26,6 +27,8 @@ export function usePencatatPelanggaran(lapor: Lapor) {
   const terakhir = useRef<Record<string, number>>({});
   const terakhirApaSaja = useRef(0);
   return useCallback<Lapor>((jenis, detail, foto) => {
+    // Pengawas sedang membuka jendela izin keluar di aplikasi Windows.
+    if (aplikasi?.jeda()) return;
     const sekarang = Date.now();
     if (sekarang - (terakhir.current[jenis] ?? 0) < JEDA_JENIS_MS) return;
     if (sekarang - terakhirApaSaja.current < JEDA_SEMUA_MS) return;
@@ -39,7 +42,8 @@ export function usePencatatPelanggaran(lapor: Lapor) {
 // Layar penuh
 // ------------------------------------------------------------------
 
-export const layarPenuhDidukung = () => typeof document !== 'undefined' && !!document.fullscreenEnabled;
+/** Di aplikasi Windows jendelanya sudah mode kiosk, jadi layar penuh HTML tidak dipakai. */
+export const layarPenuhDidukung = () => !aplikasi && typeof document !== 'undefined' && !!document.fullscreenEnabled;
 
 export async function masukLayarPenuh() {
   if (!layarPenuhDidukung() || document.fullscreenElement) return true;
@@ -213,9 +217,22 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
 
       let tanpaWajah = 0;
       let banyakWajah = 0;
+      let gagalBeruntun = 0;
       timer = window.setInterval(async () => {
         if (!detektor || video.readyState < 2) return;
-        const n = detektor.detectForVideo(video, performance.now()).detections.length;
+        let n: number;
+        try {
+          n = detektor.detectForVideo(video, performance.now()).detections.length;
+          gagalBeruntun = 0;
+        } catch (err) {
+          // Mis. WebGL tidak tersedia di perangkat ini: hentikan, tampilkan status gagal.
+          if (++gagalBeruntun >= 5) {
+            console.error('Deteksi wajah berhenti', err);
+            window.clearInterval(timer);
+            setStatus('galat');
+          }
+          return;
+        }
         setJumlahWajah(n);
         tanpaWajah = n === 0 ? tanpaWajah + 1 : 0;
         banyakWajah = n > 1 ? banyakWajah + 1 : 0;
