@@ -10,9 +10,13 @@ datasource db {
   provider = "postgresql"
 }
 
+// ADMIN    = instansi (Suku Dinas Pendidikan): semua sekolah, bank soal, jadwal, pengaturan
+// OPERATOR = sekolah: data siswa & akun guru sekolahnya, monitor ujian, hasil sekolahnya
+// GURU     = sekolah: hanya melihat hasil & analisis sekolahnya
 enum Peran {
   ADMIN
   GURU
+  OPERATOR
 }
 
 enum JenisSesiLogin {
@@ -53,16 +57,33 @@ model Pengaturan {
   nilai String
 }
 
+model Sekolah {
+  id       String     @id @default(cuid())
+  npsn     String?    @unique
+  nama     String
+  alamat   String     @default("")
+  aktif    Boolean    @default(true) // nonaktif = siswa, guru, dan operatornya tidak bisa login
+  dibuat   DateTime   @default(now())
+  pengguna Pengguna[]
+  siswa    Siswa[]
+  hasil    Hasil[]
+}
+
 model Pengguna {
   id             String    @id @default(cuid())
   nama           String
   username       String    @unique
   passwordHash   String
   peran          Peran     @default(GURU)
+  // Kosong untuk ADMIN; wajib untuk OPERATOR & GURU.
+  sekolah        Sekolah?  @relation(fields: [sekolahId], references: [id], onDelete: Restrict)
+  sekolahId      String?
   aktif          Boolean   @default(true)
   loginTerakhir  DateTime?
   dibuat         DateTime  @default(now())
   sesi           SesiLogin[]
+
+  @@index([sekolahId])
 }
 
 model Siswa {
@@ -72,6 +93,8 @@ model Siswa {
   kelas         String
   username      String    @unique
   passwordHash  String
+  sekolah       Sekolah   @relation(fields: [sekolahId], references: [id], onDelete: Restrict)
+  sekolahId     String
   aktif         Boolean   @default(true)
   loginTerakhir DateTime?
   dibuat        DateTime  @default(now())
@@ -79,6 +102,7 @@ model Siswa {
   sesiUjian     SesiUjian[]
   hasil         Hasil[]
 
+  @@index([sekolahId, kelas])
   @@index([kelas])
 }
 
@@ -118,6 +142,7 @@ model Ujian {
   nama                String
   mataPelajaran       String
   kelas               String[]  // kosong = semua kelas
+  sekolah             String[]  @default([]) // id sekolah peserta; kosong = semua sekolah
   durasiMenit         Int       @default(60) // 0 = tanpa batas
   jumlahSoal          Int       @default(0)  // 0 = semua soal
   waktuMulai          DateTime?
@@ -205,6 +230,9 @@ model Hasil {
   mataPelajaran     String
   siswa             Siswa?      @relation(fields: [siswaId], references: [id], onDelete: SetNull)
   siswaId           String?
+  sekolah           Sekolah?    @relation(fields: [sekolahId], references: [id], onDelete: SetNull)
+  sekolahId         String?
+  namaSekolah       String      @default("")
   nisn              String
   namaSiswa         String
   kelas             String
@@ -221,15 +249,18 @@ model Hasil {
 
   @@index([ujianId])
   @@index([siswaId])
+  @@index([sekolahId])
 }
 
 model LogAktivitas {
-  id       String   @id @default(cuid())
-  waktu    DateTime @default(now())
-  pengguna String
-  peran    String
-  aksi     String
-  detail   String   @default("")
+  id        String   @id @default(cuid())
+  waktu     DateTime @default(now())
+  pengguna  String
+  peran     String
+  sekolahId String?  // sekolah pelaku (operator/guru); kosong untuk admin & sistem
+  aksi      String
+  detail    String   @default("")
 
   @@index([waktu])
+  @@index([sekolahId, waktu])
 }

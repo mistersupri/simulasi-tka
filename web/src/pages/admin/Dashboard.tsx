@@ -9,10 +9,10 @@ import { api } from '@/lib/api';
 import { formatTanggal } from '@/lib/format';
 
 type Data = {
-  jumlahSiswa: number; siswaAktif: number; jumlahSoal: number; jumlahUjian: number; ujianDibuka: number;
+  jumlahSekolah: number; jumlahSiswa: number; siswaAktif: number; jumlahSoal: number; jumlahUjian: number; ujianDibuka: number;
   jumlahHasil: number; rataRata: number | null; sedangUjian: number;
   perKelas: { label: string; jumlah: number }[]; perMapel: { label: string; jumlah: number }[];
-  hasilTerbaru: { id: string; namaSiswa: string; kelas: string; namaUjian: string; nilai: number; tanggal: string }[];
+  hasilTerbaru: { id: string; namaSiswa: string; kelas: string; namaSekolah: string; namaUjian: string; nilai: number; tanggal: string }[];
 };
 
 export default function Dashboard() {
@@ -22,15 +22,22 @@ export default function Dashboard() {
   if (q.error) return <Galat galat={q.error} ulangi={() => q.refetch()} />;
   const d = q.data;
 
+  const admin = staf.peran === 'ADMIN';
+  const pengawas = staf.peran !== 'GURU';
   const langkah = [
-    !d.jumlahSiswa && staf.peran === 'ADMIN' && { teks: 'Daftarkan siswa (bisa impor dari Excel) lalu cetak kartu login.', ke: '/admin/siswa', tombol: 'Buka data siswa' },
-    !d.jumlahSoal && { teks: 'Isi bank soal, atau impor dari Excel.', ke: '/admin/soal', tombol: 'Buka bank soal' },
-    !d.jumlahUjian && { teks: 'Buat jadwal ujian beserta tokennya.', ke: '/admin/ujian', tombol: 'Buat jadwal' },
+    admin && !d.jumlahSekolah && { teks: 'Daftarkan sekolah binaan, lalu buat akun operator untuk tiap sekolah.', ke: '/admin/sekolah', tombol: 'Buka sekolah' },
+    staf.peran === 'OPERATOR' && !d.jumlahSiswa && { teks: 'Daftarkan siswa (bisa impor dari Excel) lalu cetak kartu login.', ke: '/admin/siswa', tombol: 'Buka data siswa' },
+    admin && !d.jumlahSoal && { teks: 'Isi bank soal, atau impor dari Excel.', ke: '/admin/soal', tombol: 'Buka bank soal' },
+    admin && !d.jumlahUjian && { teks: 'Buat jadwal ujian beserta tokennya.', ke: '/admin/ujian', tombol: 'Buat jadwal' },
   ].filter(Boolean) as { teks: string; ke: string; tombol: string }[];
+  const cakupan = admin ? 'semua sekolah' : 'sekolah ini';
 
   return (
     <>
-      <KepalaHalaman judul={`Selamat datang, ${staf.nama.split(' ')[0]}`} keterangan={formatTanggal(new Date(), true)} />
+      <KepalaHalaman
+        judul={`Selamat datang, ${staf.nama.split(' ')[0]}`}
+        keterangan={staf.namaSekolah ? `${staf.namaSekolah} · ${formatTanggal(new Date(), true)}` : formatTanggal(new Date(), true)}
+      />
 
       {/* Titik fokus: ujian yang sedang berjalan sekarang. */}
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-garis bg-white p-6">
@@ -39,7 +46,9 @@ export default function Dashboard() {
           <p className="text-4xl font-semibold tabular-nums">{d.sedangUjian} <span className="text-xl text-muted-foreground">siswa</span></p>
           <p className="mt-1 text-sm text-muted-foreground">{d.ujianDibuka} ujian sedang dibuka</p>
         </div>
-        <Link to="/admin/monitor" className={buttonVariants({ size: 'lg' })}>Pantau ujian</Link>
+        {pengawas
+          ? <Link to="/admin/monitor" className={buttonVariants({ size: 'lg' })}>Pantau ujian</Link>
+          : <Link to="/admin/hasil" className={buttonVariants({ size: 'lg' })}>Lihat hasil</Link>}
       </section>
 
       {langkah.length > 0 && (
@@ -58,10 +67,10 @@ export default function Dashboard() {
 
       <dl className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
+          admin ? ['Sekolah', d.jumlahSekolah, 'aktif'] : ['Soal', d.jumlahSoal, 'di bank soal'],
           ['Siswa', d.jumlahSiswa, `${d.siswaAktif} aktif`],
-          ['Soal', d.jumlahSoal, 'di bank soal'],
-          ['Hasil masuk', d.jumlahHasil, 'semua ujian'],
-          ['Rata-rata nilai', d.rataRata ?? '-', d.rataRata === null ? 'belum ada hasil' : 'semua ujian'],
+          ['Hasil masuk', d.jumlahHasil, cakupan],
+          ['Rata-rata nilai', d.rataRata ?? '-', d.rataRata === null ? 'belum ada hasil' : cakupan],
         ].map(([label, nilai, ket]) => (
           <div key={label as string} className="rounded-lg border border-border bg-white p-4">
             <dt className="text-sm text-muted-foreground">{label}</dt>
@@ -81,7 +90,7 @@ export default function Dashboard() {
                 <TableBody>
                   {d.hasilTerbaru.map((h) => (
                     <TableRow key={h.id}>
-                      <TableCell><b>{h.namaSiswa}</b><div className="text-xs text-muted-foreground">Kelas {h.kelas} · {formatTanggal(h.tanggal)}</div></TableCell>
+                      <TableCell><b>{h.namaSiswa}</b><div className="text-xs text-muted-foreground">{admin && `${h.namaSekolah} · `}Kelas {h.kelas} · {formatTanggal(h.tanggal)}</div></TableCell>
                       <TableCell>{h.namaUjian}</TableCell>
                       <TableCell className="text-right text-lg font-semibold tabular-nums">{h.nilai}</TableCell>
                     </TableRow>

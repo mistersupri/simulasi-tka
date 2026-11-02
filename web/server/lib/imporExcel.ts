@@ -52,21 +52,30 @@ function bacaLembar(ws: ExcelJS.Worksheet | undefined): Record<string, string>[]
 
 export type LaporanImpor = { siswa: number; soal: number; ujian: number; dilewati: { lembar: string; baris: number; alasan: string }[] };
 
-export async function imporExcel(buffer: ArrayBuffer | Buffer): Promise<LaporanImpor> {
+/**
+ * sekolahId: sekolah untuk siswa yang barisnya tidak punya kolom NPSN yang cocok.
+ * Bila kosong dan lembar DATA_SISWA berisi siswa tanpa NPSN, siswa itu dilewati.
+ */
+export async function imporExcel(buffer: ArrayBuffer | Buffer, sekolahId: string | null = null): Promise<LaporanImpor> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer as ArrayBuffer);
   const laporan: LaporanImpor = { siswa: 0, soal: 0, ujian: 0, dilewati: [] };
   const lewati = (lembar: string, b: Record<string, string>, alasan: string) =>
     laporan.dilewati.push({ lembar, baris: Number(b._nomor), alasan });
 
+  const npsnKeId = new Map((await prisma.sekolah.findMany({ where: { npsn: { not: null } }, select: { id: true, npsn: true } })).map((s) => [s.npsn!, s.id]));
   for (const b of bacaLembar(wb.getWorksheet('DATA_SISWA'))) {
     const username = teks(b.USERNAME).toLowerCase();
+    const npsn = teks(b.NPSN);
+    const sekolahSiswa = (npsn && npsnKeId.get(npsn)) || sekolahId;
+    if (npsn && !npsnKeId.has(npsn)) { lewati('DATA_SISWA', b, `NPSN ${npsn} belum terdaftar di menu Sekolah.`); continue; }
+    if (!sekolahSiswa) { lewati('DATA_SISWA', b, 'Sekolah belum dipilih (isi kolom NPSN atau pilih sekolah saat impor).'); continue; }
     if (!username || !b.NAMA_SISWA) { lewati('DATA_SISWA', b, 'Username atau nama kosong.'); continue; }
     if (!b.PASSWORD_HASH || !b.PASSWORD_SALT) { lewati('DATA_SISWA', b, 'Kata sandi belum di-hash; atur ulang lewat menu Data Siswa.'); continue; }
     if (await prisma.siswa.findUnique({ where: { username } })) { lewati('DATA_SISWA', b, `Username ${username} sudah ada.`); continue; }
     await prisma.siswa.create({
       data: {
-        nisn: teks(b.NISN), nama: b.NAMA_SISWA, kelas: normalisasiKelas(b.KELAS), username,
+        nisn: teks(b.NISN), nama: b.NAMA_SISWA, kelas: normalisasiKelas(b.KELAS), username, sekolahId: sekolahSiswa,
         aktif: teks(b.STATUS).toUpperCase() === 'AKTIF',
         passwordHash: hashDariSheetLama(b.PASSWORD_HASH, b.PASSWORD_SALT),
       },

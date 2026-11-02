@@ -14,7 +14,7 @@ export const KUNCI: Record<string, string> = { MTK001: 'B', MTK002: 'C', MTK003:
 export async function kosongkanDb() {
   kosongkanGagalLogin();
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "Pelanggaran","Hasil","SesiUjian","Ujian","Soal","SesiLogin","Siswa","Pengguna","Pengaturan","LogAktivitas" CASCADE',
+    'TRUNCATE "Pelanggaran","TangkapanLayar","Hasil","SesiUjian","Ujian","Soal","SesiLogin","Siswa","Pengguna","Sekolah","Pengaturan","LogAktivitas" CASCADE',
   );
 }
 
@@ -22,13 +22,14 @@ export async function kosongkanDb() {
 export async function siapkan() {
   await kosongkanDb();
   await prisma.pengguna.create({ data: { nama: 'Admin', username: 'admin', peran: 'ADMIN', passwordHash: await hashPassword('admin123') } });
-  await imporExcel(await fs.readFile(EXCEL));
+  const sekolah = await prisma.sekolah.create({ data: { nama: 'SDN Johar Baru 01 Pagi', npsn: '20100001' } });
+  await imporExcel(await fs.readFile(EXCEL), sekolah.id);
   const admin = request.agent(app);
   await admin.post('/api/auth/staf/login').send({ username: 'admin', password: 'admin123' }).expect(200);
   const siswa = request.agent(app);
   await siswa.post('/api/auth/siswa/login').send({ username: 'uji_tka', password: 'LatihanTKA2026!' }).expect(200);
   const ujianId = (await prisma.ujian.findFirstOrThrow()).id;
-  return { admin, siswa, ujianId };
+  return { admin, siswa, ujianId, sekolahId: sekolah.id };
 }
 
 /** Jawaban benar dalam huruf tampil, memperhitungkan opsi yang diacak. */

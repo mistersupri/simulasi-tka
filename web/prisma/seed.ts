@@ -21,7 +21,10 @@ if (!(await prisma.pengguna.count())) {
 
 const berkas = process.env.SEED_EXCEL;
 if (berkas) {
-  const laporan = await imporExcel(await fs.readFile(berkas));
+  // Siswa dari Excel lama dimasukkan ke satu sekolah (SEED_SEKOLAH), dibuat bila belum ada.
+  const namaSekolah = process.env.SEED_SEKOLAH || 'SDN Johar Baru 01 Pagi';
+  const sekolah = (await prisma.sekolah.findFirst({ where: { nama: namaSekolah } })) ?? (await prisma.sekolah.create({ data: { nama: namaSekolah } }));
+  const laporan = await imporExcel(await fs.readFile(berkas), sekolah.id);
   console.log(`Impor ${berkas}: ${laporan.siswa} siswa, ${laporan.soal} soal, ${laporan.ujian} ujian.`);
   for (const d of laporan.dilewati) console.log(`  dilewati ${d.lembar} baris ${d.baris}: ${d.alasan}`);
 }

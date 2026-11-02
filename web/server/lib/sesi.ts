@@ -6,8 +6,9 @@ import { galat } from './galat.ts';
 
 export const COOKIE = { SISWA: 'tka_siswa', STAF: 'tka_staf' } as const;
 
-export type SiswaSesi = { id: string; nisn: string; nama: string; kelas: string; username: string };
-export type Staf = { id: string; nama: string; username: string; peran: Peran };
+export type SiswaSesi = { id: string; nisn: string; nama: string; kelas: string; username: string; sekolahId: string; namaSekolah: string };
+/** sekolahId null hanya untuk ADMIN (instansi). */
+export type Staf = { id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null };
 
 declare global {
   namespace Express {
@@ -49,7 +50,10 @@ export async function akhiriSesi(req: Request, res: Response, jenis: 'SISWA' | '
 async function bacaSesi(req: Request, jenis: 'SISWA' | 'STAF') {
   const token = req.cookies?.[COOKIE[jenis]];
   if (!token) return null;
-  const sesi = await prisma.sesiLogin.findUnique({ where: { token }, include: { siswa: true, pengguna: true } });
+  const sesi = await prisma.sesiLogin.findUnique({
+    where: { token },
+    include: { siswa: { include: { sekolah: true } }, pengguna: { include: { sekolah: true } } },
+  });
   if (!sesi || sesi.jenis !== jenis || sesi.kadaluarsa < new Date()) return null;
   return sesi;
 }
@@ -57,15 +61,19 @@ async function bacaSesi(req: Request, jenis: 'SISWA' | 'STAF') {
 export async function siswaDariRequest(req: Request): Promise<SiswaSesi | null> {
   const sesi = await bacaSesi(req, 'SISWA');
   const s = sesi?.siswa;
-  if (!s || !s.aktif) return null;
-  return { id: s.id, nisn: s.nisn, nama: s.nama, kelas: s.kelas, username: s.username };
+  if (!s || !s.aktif || !s.sekolah.aktif) return null;
+  return { id: s.id, nisn: s.nisn, nama: s.nama, kelas: s.kelas, username: s.username, sekolahId: s.sekolahId, namaSekolah: s.sekolah.nama };
 }
 
 export async function stafDariRequest(req: Request): Promise<Staf | null> {
   const sesi = await bacaSesi(req, 'STAF');
   const p = sesi?.pengguna;
   if (!p || !p.aktif) return null;
-  return { id: p.id, nama: p.nama, username: p.username, peran: p.peran };
+  if (p.peran !== 'ADMIN' && (!p.sekolah || !p.sekolah.aktif)) return null;
+  return {
+    id: p.id, nama: p.nama, username: p.username, peran: p.peran,
+    sekolahId: p.peran === 'ADMIN' ? null : p.sekolahId, namaSekolah: p.peran === 'ADMIN' ? null : (p.sekolah?.nama ?? null),
+  };
 }
 
 export async function butuhSiswa(req: Request, _res: Response, next: NextFunction) {
@@ -75,12 +83,16 @@ export async function butuhSiswa(req: Request, _res: Response, next: NextFunctio
   next();
 }
 
-/** Tanpa argumen: ADMIN & GURU boleh. */
+const NAMA_PERAN: Record<Peran, string> = { ADMIN: 'admin instansi', OPERATOR: 'operator sekolah', GURU: 'guru' };
+
+/** Tanpa argumen: semua peran staf boleh. */
 export function butuhStaf(...peran: Peran[]) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     const staf = await stafDariRequest(req);
     if (!staf) throw galat(401, 'Sesi login berakhir. Silakan masuk kembali.');
-    if (peran.length && !peran.includes(staf.peran)) throw galat(403, 'Akses ditolak. Fitur ini hanya untuk admin.');
+    if (peran.length && !peran.includes(staf.peran)) {
+      throw galat(403, `Akses ditolak. Fitur ini hanya untuk ${peran.map((p) => NAMA_PERAN[p]).join(' dan ')}.`);
+    }
     req.staf = staf;
     next();
   };
@@ -110,3 +122,24 @@ export const hapusGagalLogin = (kunci: string) => gagalLogin.delete(kunci);
 
 /** Dipakai tes agar penguncian dari satu tes tidak terbawa ke tes lain. */
 export const kosongkanGagalLogin = () => gagalLogin.clear();
+
+/**
+ * Batas data sekolah untuk staf: null = semua sekolah (admin instansi),
+ * selain itu id sekolah staf. Dipakai sebagai filter Prisma.
+ */
+export function sekolahStaf(staf: Staf): string | null {
+  return staf.peran === 'ADMIN' ? null : staf.sekolahId;
+}
+
+/** Filter `where` untuk model yang punya kolom sekolahId (Siswa, Hasil, Pengguna). */
+export function filterSekolah(staf: Staf, pilihan?: unknown): { sekolahId?: string } {
+  const milik = sekolahStaf(staf);
+  if (milik) return { sekolahId: milik };
+  return typeof pilihan === 'string' && pilihan ? { sekolahId: pilihan } : {};
+}
+
+/** Galat 404 bila data milik sekolah lain (tanpa membocorkan bahwa data itu ada). */
+export function pastikanSekolah(staf: Staf, sekolahId: string | null | undefined, pesan = 'Data tidak ditemukan.') {
+  const milik = sekolahStaf(staf);
+  if (milik && sekolahId !== milik) throw galat(404, pesan);
+}

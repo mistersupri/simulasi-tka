@@ -1,7 +1,14 @@
 // Bentuk data dari API (lihat server/routes).
 
-export type ProfilSiswa = { jenis: 'siswa'; nama: string; kelas: string; username: string; nisn: string; bolehGantiPassword: boolean };
-export type ProfilStaf = { jenis: 'staf'; id: string; nama: string; username: string; peran: 'ADMIN' | 'GURU' };
+export type ProfilSiswa = { jenis: 'siswa'; nama: string; kelas: string; username: string; nisn: string; namaSekolah: string; bolehGantiPassword: boolean };
+/** ADMIN = instansi (Sudin), OPERATOR & GURU = sekolah. */
+export type Peran = 'ADMIN' | 'OPERATOR' | 'GURU';
+export const LABEL_PERAN: Record<Peran, string> = { ADMIN: 'Admin instansi', OPERATOR: 'Operator sekolah', GURU: 'Guru' };
+export type ProfilStaf = { jenis: 'staf'; id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null };
+export type SekolahPilihan = { id: string; nama: string; npsn: string | null; aktif: boolean };
+export type Sekolah = SekolahPilihan & {
+  alamat: string; dibuat: string; jumlahSiswa: number; jumlahOperator: number; jumlahGuru: number; jumlahHasil: number; rataRata: number | null;
+};
 export type Info = { namaSekolah: string; tahunAjaran: string; pengumuman: string; adaLogo: boolean };
 
 export type StatusUjian = 'TERSEDIA' | 'BERLANGSUNG' | 'SELESAI' | 'BELUM_DIBUKA' | 'DITUTUP';
@@ -57,15 +64,19 @@ export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; token: string | null; acakSoal: boolean; acakOpsi: boolean;
   tampilkanNilai: boolean; tampilkanPembahasan: boolean; maksPercobaan: number; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
+  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; sekolah: string[]; soalPerKelas: Record<string, number>; jumlahPeserta: number;
 };
-export type Siswa = { id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: string | null };
-export type Pengguna = { id: string; nama: string; username: string; peran: 'ADMIN' | 'GURU'; aktif: boolean; loginTerakhir: string | null };
+export type Siswa = {
+  id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: string | null; sekolahId: string; namaSekolah: string;
+};
+export type Pengguna = {
+  id: string; nama: string; username: string; peran: Peran; aktif: boolean; loginTerakhir: string | null; sekolahId: string | null; namaSekolah: string | null;
+};
 export type Hasil = {
-  id: string; ujianId: string | null; namaUjian: string; mataPelajaran: string; nisn: string; namaSiswa: string; kelas: string;
+  id: string; ujianId: string | null; namaUjian: string; mataPelajaran: string; sekolahId: string | null; namaSekolah: string; nisn: string; namaSiswa: string; kelas: string;
   username: string; tanggal: string; nilai: number; benar: number; salah: number; kosong: number; durasiDetik: number;
   status: StatusHasil; jumlahPelanggaran: number;
 };
 export type Pelanggaran = { id: string; jenis: JenisPelanggaran; waktu: string; foto: string | null; detail: string };
 export type TangkapanLayar = { id: string; waktu: string; berkas: string; pemicu: 'BERKALA' | 'PELANGGARAN'; keterangan: string };
-export type Akun = { nama: string; kelas: string; username: string; password: string };
+export type Akun = { nama: string; kelas: string; username: string; password: string; sekolah?: string };

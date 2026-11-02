@@ -2,7 +2,7 @@ import { DownloadSimple, FileXls, UploadSimple } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { KepalaHalaman } from '@/components/admin';
+import { KepalaHalaman, PilihSekolah } from '@/components/admin';
 import { Galat, Memuat } from '@/components/Keadaan';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ export default function HalamanPengaturan() {
   const q = useQuery({ queryKey: ['pengaturan'], queryFn: () => api.get<Data>('/admin/pengaturan') });
   const [d, setD] = useState({ NAMA_SEKOLAH: '', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: '70', SISWA_BOLEH_GANTI_PASSWORD: true, SIMPAN_TANGKAPAN_HARI: '30' });
   const [laporan, setLaporan] = useState<LaporanImpor | null>(null);
+  const [sekolahImpor, setSekolahImpor] = useState('');
   const [versiLogo, setVersiLogo] = useState(0);
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function HalamanPengaturan() {
     mutationFn: (file: File) => {
       const form = new FormData();
       form.append('berkas', file);
+      if (sekolahImpor) form.append('sekolahId', sekolahImpor);
       return api.post<LaporanImpor>('/admin/impor-excel', form);
     },
     onSuccess: (r) => { setLaporan(r); qc.invalidateQueries(); },
@@ -73,7 +75,7 @@ export default function HalamanPengaturan() {
         <Card>
           <form onSubmit={(e) => { e.preventDefault(); simpan.mutate(); }} className="space-y-4">
             <CardTitle>Identitas sekolah</CardTitle>
-            <div className="space-y-1.5"><Label htmlFor="p-nama">Nama sekolah</Label><Input id="p-nama" value={d.NAMA_SEKOLAH} onChange={(e) => setD({ ...d, NAMA_SEKOLAH: e.target.value })} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="p-nama">Nama instansi</Label><Input id="p-nama" value={d.NAMA_SEKOLAH} onChange={(e) => setD({ ...d, NAMA_SEKOLAH: e.target.value })} required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label htmlFor="p-tahun">Tahun ajaran</Label><Input id="p-tahun" value={d.TAHUN_AJARAN} onChange={(e) => setD({ ...d, TAHUN_AJARAN: e.target.value })} /></div>
               <div className="space-y-1.5"><Label htmlFor="p-kkm">KKM</Label><Input id="p-kkm" type="number" min={0} max={100} value={d.KKM} onChange={(e) => setD({ ...d, KKM: e.target.value })} /><p className="text-xs text-muted-foreground">0 = tanpa KKM</p></div>
@@ -107,8 +109,13 @@ export default function HalamanPengaturan() {
             <CardTitle>Pindahkan data dari versi Google Sheets</CardTitle>
             <CardDescription>
               Unduh spreadsheet lama sebagai .xlsx (File, Download, Microsoft Excel), lalu unggah di sini.
-              Siswa tetap bisa login dengan kata sandi lama.
+              Siswa tetap bisa login dengan kata sandi lama. Siswa masuk ke sekolah yang dipilih di bawah,
+              kecuali barisnya punya kolom NPSN yang cocok dengan sekolah terdaftar.
             </CardDescription>
+            <div className="mt-3 max-w-sm space-y-1.5">
+              <Label htmlFor="impor-sekolah">Sekolah siswa</Label>
+              <PilihSekolah id="impor-sekolah" nilai={sekolahImpor} ubah={setSekolahImpor} label="Sekolah untuk siswa yang diimpor" />
+            </div>
             <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3 cursor-pointer focus-within:outline-3 focus-within:outline-biru' })}>
               <FileXls /> {impor.isPending ? 'Mengimpor...' : 'Pilih berkas .xlsx'}
               <input type="file" accept=".xlsx" className="sr-only" disabled={impor.isPending} onChange={(e) => { const f = e.target.files?.[0]; if (f) impor.mutate(f); e.target.value = ''; }} />

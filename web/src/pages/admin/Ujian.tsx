@@ -1,12 +1,13 @@
 import { ArrowsClockwise, ArrowsOut, Camera, ChartBar, Desktop, Monitor, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { KepalaHalaman } from '@/components/admin';
+import { KepalaHalaman, useDaftarSekolah, useStaf } from '@/components/admin';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +33,11 @@ function statusJadwal(u: Ujian) {
 
 export default function HalamanUjian() {
   const qc = useQueryClient();
+  const staf = useStaf();
+  // Operator sekolah hanya melihat jadwal & token untuk dibagikan saat ujian; jadwal diatur instansi.
+  const admin = staf.peran === 'ADMIN';
+  const sekolahQ = useDaftarSekolah();
+  const namaSekolah = useMemo(() => new Map((sekolahQ.data ?? []).map((s) => [s.id, s.nama])), [sekolahQ.data]);
   const [konfirmasi, dialog] = useKonfirmasi();
   const [form, setForm] = useState<Ujian | 'baru' | null>(null);
   const [analisis, setAnalisis] = useState<string | null>(null);
@@ -51,11 +57,16 @@ export default function HalamanUjian() {
 
   return (
     <>
-      <KepalaHalaman judul="Jadwal ujian" keterangan="Atur kapan ujian dibuka, tokennya, dan cara pengawasannya.">
-        <Button onClick={() => setForm('baru')}><Plus /> Buat ujian</Button>
+      <KepalaHalaman
+        judul={admin ? 'Jadwal ujian' : 'Jadwal & token'}
+        keterangan={admin
+          ? 'Atur sekolah peserta, kapan ujian dibuka, tokennya, dan cara pengawasannya.'
+          : 'Jadwal ujian untuk sekolah Anda dari Suku Dinas. Bacakan token kepada siswa saat ujian dimulai.'}
+      >
+        {admin && <Button onClick={() => setForm('baru')}><Plus /> Buat ujian</Button>}
       </KepalaHalaman>
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !q.data.ujian.length ? (
-        <Kosong judul="Belum ada ujian.">Buat ujian pertama, lalu bagikan tokennya saat hari ujian.</Kosong>
+        <Kosong judul="Belum ada ujian.">{admin ? 'Buat ujian pertama, lalu bagikan tokennya saat hari ujian.' : 'Belum ada ujian yang dijadwalkan untuk sekolah Anda.'}</Kosong>
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
           {q.data.ujian.map((u) => {
@@ -75,11 +86,19 @@ export default function HalamanUjian() {
                   </div>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  {admin && (
+                    <>
+                      <dt className="text-muted-foreground">Sekolah</dt>
+                      <dd className="font-semibold">
+                        {u.sekolah.length ? (u.sekolah.length > 2 ? `${u.sekolah.length} sekolah` : u.sekolah.map((id) => namaSekolah.get(id) ?? '?').join(', ')) : 'Semua sekolah'}
+                      </dd>
+                    </>
+                  )}
                   <dt className="text-muted-foreground">Waktu</dt><dd className="font-semibold">{u.durasiMenit ? `${u.durasiMenit} menit` : 'Tanpa batas'}</dd>
                   <dt className="text-muted-foreground">Soal</dt><dd className="font-semibold">{u.jumlahSoal ? `${u.jumlahSoal} diambil acak` : 'Semua soal'}</dd>
                   <dt className="text-muted-foreground">Jadwal</dt>
                   <dd className="font-semibold">{u.waktuMulai || u.waktuSelesai ? `${formatTanggal(u.waktuMulai)} sampai ${formatTanggal(u.waktuSelesai)}` : 'Kapan saja'}</dd>
-                  <dt className="text-muted-foreground">Sudah mengerjakan</dt><dd className="font-semibold">{u.jumlahPeserta} siswa</dd>
+                  <dt className="text-muted-foreground">Sudah mengerjakan</dt><dd className="font-semibold">{u.jumlahPeserta} siswa{admin ? '' : ' sekolah ini'}</dd>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {u.wajibLayarPenuh && <Badge><ArrowsOut /> Layar penuh</Badge>}
@@ -88,18 +107,20 @@ export default function HalamanUjian() {
                   {u.intervalRekamLayar > 0 && <Badge><Monitor /> Rekam layar tiap {labelInterval(u.intervalRekamLayar)}</Badge>}
                   {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
-                {kekurangan.length > 0 && (
+                {admin && kekurangan.length > 0 && (
                   <p className="mt-3 rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">
                     Soal kurang: {kekurangan.map(([k, n]) => `kelas ${k} hanya ${n}`).join(', ')}.
                   </p>
                 )}
                 <div className="mt-4 flex flex-1 flex-wrap items-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple /> Ubah</Button>
+                  {admin && <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple /> Ubah</Button>}
                   <Button size="sm" variant="outline" onClick={() => setAnalisis(u.id)}><ChartBar /> Analisis</Button>
-                  <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise /> Token baru</Button>
-                  <Button size="sm" variant="ghost" className="ml-auto text-merah" aria-label={`Hapus ${u.nama}`} onClick={async () => {
-                    if (await konfirmasi({ judul: `Hapus "${u.nama}"?`, pesan: 'Jadwal dihapus. Hasil ujian yang sudah masuk tetap tersimpan.', ya: 'Hapus', bahaya: true })) hapus.mutate(u.id);
-                  }}><Trash /></Button>
+                  {admin && <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise /> Token baru</Button>}
+                  {admin && (
+                    <Button size="sm" variant="ghost" className="ml-auto text-merah" aria-label={`Hapus ${u.nama}`} onClick={async () => {
+                      if (await konfirmasi({ judul: `Hapus "${u.nama}"?`, pesan: 'Jadwal dihapus. Hasil ujian yang sudah masuk tetap tersimpan.', ya: 'Hapus', bahaya: true })) hapus.mutate(u.id);
+                    }}><Trash /></Button>
+                  )}
                 </div>
               </li>
             );
@@ -129,6 +150,8 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
     nama: ujian?.nama ?? '',
     mataPelajaran: ujian?.mataPelajaran ?? daftarMapel[0] ?? '',
     kelas: ujian?.kelas.join(', ') ?? '6',
+    sekolah: ujian?.sekolah ?? [],
+    semuaSekolah: !ujian?.sekolah.length,
     durasiMenit: String(ujian?.durasiMenit ?? 60),
     jumlahSoal: String(ujian?.jumlahSoal ?? 0),
     waktuMulai: keInputWaktu(ujian?.waktuMulai),
@@ -149,7 +172,8 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
   const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
   const simpan = useMutation({
     mutationFn: () => {
-      const body = { ...d, waktuMulai: dariInputWaktu(d.waktuMulai), waktuSelesai: dariInputWaktu(d.waktuSelesai) };
+      const { semuaSekolah, ...isi } = d;
+      const body = { ...isi, sekolah: semuaSekolah ? [] : d.sekolah, waktuMulai: dariInputWaktu(d.waktuMulai), waktuSelesai: dariInputWaktu(d.waktuSelesai) };
       return ujian ? api.put<{ pesan: string }>(`/admin/ujian/${ujian.id}`, body) : api.post<{ pesan: string }>('/admin/ujian', body);
     },
     onSuccess: (r) => { toast.success(r.pesan); qc.invalidateQueries({ queryKey: ['ujian'] }); tutup(); },
@@ -159,7 +183,15 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
   return (
     <Dialog open onOpenChange={(b) => !b && tutup()}>
       <DialogContent lebar>
-        <form onSubmit={(e) => { e.preventDefault(); setGalat(''); simpan.mutate(); }} className="flex min-h-0 flex-col">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!d.semuaSekolah && !d.sekolah.length) { setGalat('Pilih minimal satu sekolah peserta, atau nyalakan "Semua sekolah".'); return; }
+            setGalat('');
+            simpan.mutate();
+          }}
+          className="flex min-h-0 flex-col"
+        >
           <DialogHeader><DialogTitle>{ujian ? 'Ubah ujian' : 'Buat ujian'}</DialogTitle></DialogHeader>
           <DialogBody className="space-y-6">
             <section className="grid gap-4 sm:grid-cols-2">
@@ -171,6 +203,8 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
               </div>
               <div className="space-y-1.5"><Label htmlFor="u-kelas">Kelas</Label><Input id="u-kelas" value={d.kelas} onChange={(e) => ubah('kelas', e.target.value)} /><p className="text-xs text-muted-foreground">Contoh: 6 atau 5, 6. Kosongkan untuk semua kelas.</p></div>
             </section>
+
+            <PilihSekolahPeserta semua={d.semuaSekolah} ubahSemua={(v) => ubah('semuaSekolah', v)} nilai={d.sekolah} ubah={(v) => ubah('sekolah', v)} />
 
             <section>
               <h3 className="text-base">Waktu & soal</h3>
@@ -235,5 +269,50 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Sekolah peserta: kosong berarti semua sekolah (termasuk sekolah yang ditambahkan nanti). */
+function PilihSekolahPeserta({ semua, ubahSemua, nilai, ubah }: { semua: boolean; ubahSemua: (v: boolean) => void; nilai: string[]; ubah: (v: string[]) => void }) {
+  const q = useDaftarSekolah();
+  const [cari, setCari] = useState('');
+  const sebagian = !semua;
+  const daftar = (q.data ?? []).filter((s) => !cari || s.nama.toLowerCase().includes(cari.toLowerCase()));
+  const dipilih = new Set(nilai);
+  return (
+    <section>
+      <h3 className="text-base">Sekolah peserta</h3>
+      <div className="mt-3 flex items-start gap-3">
+        <Switch id="u-semua-sekolah" checked={!sebagian} onCheckedChange={ubahSemua} className="mt-0.5" />
+        <div>
+          <Label htmlFor="u-semua-sekolah">Semua sekolah</Label>
+          <p className="text-xs text-muted-foreground">Termasuk sekolah yang ditambahkan kemudian. Matikan untuk memilih sekolah tertentu.</p>
+        </div>
+      </div>
+      {sebagian && (
+        <div className="mt-3 rounded-lg border border-garis p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input type="search" className="max-w-xs" placeholder="Cari sekolah..." aria-label="Cari sekolah peserta" value={cari} onChange={(e) => setCari(e.target.value)} />
+            <span className="text-sm font-semibold">{nilai.length} dipilih</span>
+            <Button type="button" size="sm" variant="ghost" onClick={() => ubah([...new Set([...nilai, ...daftar.map((s) => s.id)])])}>Pilih semua yang tampil</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => ubah([])}>Kosongkan</Button>
+          </div>
+          <ul className="mt-3 grid max-h-56 gap-1 overflow-y-auto sm:grid-cols-2">
+            {daftar.map((s) => (
+              <li key={s.id}>
+                <Label className="flex items-center gap-2 rounded-md px-2 py-1.5 font-normal hover:bg-muted">
+                  <Checkbox
+                    checked={dipilih.has(s.id)}
+                    onCheckedChange={(v) => ubah(v ? [...nilai, s.id] : nilai.filter((x) => x !== s.id))}
+                  />
+                  {s.nama}{!s.aktif && <span className="text-xs text-muted-foreground">(nonaktif)</span>}
+                </Label>
+              </li>
+            ))}
+          </ul>
+          {!nilai.length && <p className="mt-2 text-sm font-semibold text-merah">Pilih minimal satu sekolah, atau nyalakan "Semua sekolah".</p>}
+        </div>
+      )}
+    </section>
   );
 }

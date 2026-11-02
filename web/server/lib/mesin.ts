@@ -95,7 +95,7 @@ export function sesiKadaluarsa(batasWaktu: Date | null): boolean {
  */
 export async function finalisasiSesi(sesiId: string, jawabanBaru: Jawaban | null, status: StatusHasil) {
   return prisma.$transaction(async (tx) => {
-    const sesi = await tx.sesiUjian.findUnique({ where: { id: sesiId }, include: { ujian: true, siswa: true } });
+    const sesi = await tx.sesiUjian.findUnique({ where: { id: sesiId }, include: { ujian: true, siswa: { include: { sekolah: true } } } });
     if (!sesi) throw galat(404, 'Sesi ujian tidak ditemukan.');
 
     const jawaban = jawabanBaru ?? (sesi.jawaban as Jawaban);
@@ -119,6 +119,8 @@ export async function finalisasiSesi(sesiId: string, jawabanBaru: Jawaban | null
         namaUjian: sesi.ujian.nama,
         mataPelajaran: sesi.ujian.mataPelajaran,
         siswaId: sesi.siswaId,
+        sekolahId: sesi.siswa.sekolahId,
+        namaSekolah: sesi.siswa.sekolah.nama,
         nisn: sesi.siswa.nisn,
         namaSiswa: sesi.siswa.nama,
         kelas: sesi.siswa.kelas,

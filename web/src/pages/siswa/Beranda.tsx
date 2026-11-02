@@ -132,6 +132,7 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
       <main className="mx-auto max-w-5xl px-4 pt-8 pb-16">
         <h1 className="text-2xl">Selamat datang, {profil.nama}</h1>
         <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+          {profil.namaSekolah && <div className="flex gap-1.5"><dt className="text-muted-foreground">Sekolah</dt><dd className="font-medium">{profil.namaSekolah}</dd></div>}
           <div className="flex gap-1.5"><dt className="text-muted-foreground">Kelas</dt><dd className="font-medium">{profil.kelas}</dd></div>
           {profil.nisn && <div className="flex gap-1.5"><dt className="text-muted-foreground">NISN</dt><dd className="font-medium">{profil.nisn}</dd></div>}
           <div className="flex gap-1.5"><dt className="text-muted-foreground">Username</dt><dd className="font-medium">{profil.username}</dd></div>

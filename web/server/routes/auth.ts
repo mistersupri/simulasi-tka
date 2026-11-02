@@ -17,23 +17,29 @@ const skemaLogin = z.object({
 });
 const jenisDari = (v: unknown) => (v === 'staf' ? 'STAF' : 'SISWA') as 'SISWA' | 'STAF';
 
-async function profilSiswa(s: { nama: string; kelas: string; username: string; nisn: string }) {
+async function profilSiswa(s: { nama: string; kelas: string; username: string; nisn: string; namaSekolah: string }) {
   const p = await ambilPengaturan();
-  return { jenis: 'siswa' as const, ...s, bolehGantiPassword: p.SISWA_BOLEH_GANTI_PASSWORD === 'YA' };
+  return {
+    jenis: 'siswa' as const, nama: s.nama, kelas: s.kelas, username: s.username, nisn: s.nisn, namaSekolah: s.namaSekolah,
+    bolehGantiPassword: p.SISWA_BOLEH_GANTI_PASSWORD === 'YA',
+  };
 }
+
+const PESAN_SEKOLAH_NONAKTIF = 'Sekolah Anda sedang dinonaktifkan. Silakan hubungi Suku Dinas Pendidikan.';
 
 rutAuth.post('/siswa/login', async (req, res) => {
   const { username, password } = skemaLogin.parse(req.body);
   const kunci = `siswa:${username}`;
   cekKunciLogin(kunci);
 
-  const siswa = await prisma.siswa.findFirst({ where: { username: { equals: username, mode: 'insensitive' } } });
+  const siswa = await prisma.siswa.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, include: { sekolah: true } });
   const cek = siswa ? await cocokPassword(password, siswa.passwordHash) : { cocok: false, perluUpgrade: false };
   if (!siswa || !cek.cocok) {
     catatGagalLogin(kunci);
     throw galat(401, 'Username atau kata sandi salah.');
   }
-  if (!siswa.aktif) throw galat(403, 'Akun belum aktif. Silakan hubungi admin sekolah.');
+  if (!siswa.aktif) throw galat(403, 'Akun belum aktif. Silakan hubungi operator sekolah.');
+  if (!siswa.sekolah.aktif) throw galat(403, PESAN_SEKOLAH_NONAKTIF);
 
   hapusGagalLogin(kunci);
   await prisma.siswa.update({
@@ -41,7 +47,7 @@ rutAuth.post('/siswa/login', async (req, res) => {
     data: { loginTerakhir: new Date(), ...(cek.perluUpgrade ? { passwordHash: await hashPassword(password) } : {}) },
   });
   await mulaiSesi(res, 'SISWA', siswa.id);
-  res.json({ profil: await profilSiswa(siswa) });
+  res.json({ profil: await profilSiswa({ ...siswa, namaSekolah: siswa.sekolah.nama }) });
 });
 
 rutAuth.post('/staf/login', async (req, res) => {
@@ -49,19 +55,26 @@ rutAuth.post('/staf/login', async (req, res) => {
   const kunci = `staf:${username}`;
   cekKunciLogin(kunci);
 
-  const p = await prisma.pengguna.findFirst({ where: { username: { equals: username, mode: 'insensitive' } } });
+  const p = await prisma.pengguna.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, include: { sekolah: true } });
   const cek = p ? await cocokPassword(password, p.passwordHash) : { cocok: false, perluUpgrade: false };
   if (!p || !cek.cocok) {
     catatGagalLogin(kunci);
     throw galat(401, 'Username atau kata sandi salah.');
   }
   if (!p.aktif) throw galat(403, 'Akun tidak aktif.');
+  if (p.peran !== 'ADMIN' && !p.sekolah?.aktif) throw galat(403, PESAN_SEKOLAH_NONAKTIF);
 
   hapusGagalLogin(kunci);
   await prisma.pengguna.update({ where: { id: p.id }, data: { loginTerakhir: new Date() } });
   await mulaiSesi(res, 'STAF', p.id);
   await catatLog(p, 'LOGIN');
-  res.json({ profil: { jenis: 'staf', id: p.id, nama: p.nama, username: p.username, peran: p.peran } });
+  const admin = p.peran === 'ADMIN';
+  res.json({
+    profil: {
+      jenis: 'staf', id: p.id, nama: p.nama, username: p.username, peran: p.peran,
+      sekolahId: admin ? null : p.sekolahId, namaSekolah: admin ? null : (p.sekolah?.nama ?? null),
+    },
+  });
 });
 
 /** profil: null berarti belum login (bukan galat, agar konsol browser bersih). */

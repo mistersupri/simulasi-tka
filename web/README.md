@@ -50,17 +50,40 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 > - Perangkat yang sangat lambat mungkin perlu beberapa detik untuk memuat model wajah
 >   (±15 MB WebAssembly, di-cache browser setelah pertama kali).
 
-**Guru & admin** (`/admin`)
+**Petugas** (`/admin`): satu server untuk satu Suku Dinas Pendidikan dengan banyak sekolah.
+
+| Peran | Siapa | Bisa apa |
+|---|---|---|
+| Admin instansi | Suku Dinas | Semua sekolah: daftar sekolah, bank soal, jadwal ujian (untuk semua atau sebagian sekolah), semua akun, data siswa, monitor, hasil & perbandingan antarsekolah, pengaturan, log. |
+| Operator sekolah | 1 per sekolah atau lebih | Hanya sekolahnya: tambah/ubah/impor siswa & cetak kartu login, akun guru, monitor ujian (tambah waktu, kirim paksa, reset), jadwal & token, hasil, log akun sekolahnya. |
+| Guru | Sekolah | Hanya melihat hasil & analisis siswa sekolahnya, dan mengunduhnya. |
+
+Pembatasan dilakukan di server (bukan hanya menu yang disembunyikan): operator dan guru tidak
+bisa membuka data sekolah lain walau mengubah alamat atau parameter permintaan.
+Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operatornya.
+
 - Bank soal: tambah/ubah, gambar, PG kompleks, pratinjau, impor tempel dari Excel/CSV, unduh.
 - Jadwal ujian: mapel, kelas, durasi, jumlah soal acak, jadwal buka/tutup, token, acak opsi,
   aturan pengawasan.
-- Hasil: detail jawaban & catatan pelanggaran per siswa, analisis butir soal, unduh Excel/CSV.
+- Hasil: detail jawaban & catatan pelanggaran per siswa, analisis butir soal (tingkat kesukaran,
+  daya beda, sebaran pengecoh), rekap per sekolah dan per kelas, unduh Excel/CSV.
 - Data siswa: impor massal dengan username/kata sandi otomatis, **cetak kartu login**,
   reset kata sandi, aktif/nonaktif.
-- Guru & admin (peran GURU hanya bisa mengurus soal, ujian, monitor, dan hasil), pengaturan
-  sekolah & logo, log aktivitas, unduh cadangan JSON.
-- **Impor dari versi Google Sheets**: unggah file `.xlsx` lama di menu Pengaturan.
-  Siswa tetap bisa login dengan kata sandi lama; hash otomatis diperbarui ke scrypt saat login.
+- Pengaturan instansi (nama, tahun ajaran, KKM, pengumuman, logo), log aktivitas, unduh cadangan JSON.
+- **Impor dari versi Google Sheets**: unggah file `.xlsx` lama di menu Pengaturan dan pilih
+  sekolahnya (atau isi kolom `NPSN` di lembar DATA_SISWA). Siswa tetap bisa login dengan kata
+  sandi lama; hash otomatis diperbarui ke scrypt saat login.
+
+**Mulai pakai untuk banyak sekolah**
+1. Admin instansi: menu **Sekolah**, tambahkan sekolah binaan (NPSN disarankan).
+2. Menu **Pengguna**: buat akun **Operator sekolah** untuk tiap sekolah, cetak/bagikan kata sandinya.
+3. Operator: impor siswa sekolahnya di **Data siswa**, cetak kartu login, buat akun guru.
+4. Admin: isi **Bank soal**, buat **Jadwal ujian**, pilih sekolah peserta.
+5. Hari ujian: operator membacakan token dari menu **Jadwal & token** dan memantau di **Monitor ujian**.
+
+Memperbarui dari versi satu sekolah: `prisma migrate deploy` memindahkan semua siswa, guru, dan
+hasil lama ke sekolah pertama bernama sesuai pengaturan lama, akun guru tetap guru di sekolah itu,
+dan nama instansi bisa diganti di Pengaturan.
 
 ## Menjalankan untuk pengembangan
 
@@ -71,7 +94,7 @@ cd web
 cp .env.example .env          # sesuaikan DATABASE_URL
 npm install                   # juga menyalin berkas MediaPipe & generate Prisma client
 npx prisma migrate deploy     # membuat tabel
-ADMIN_PASSWORD=RahasiaAdmin1 SEED_EXCEL=../database/Database_Simulasi_TKA_SDN_Johar_Baru_01_Pagi.xlsx npm run db:seed
+ADMIN_PASSWORD=RahasiaAdmin1 SEED_EXCEL=../database/Database_Simulasi_TKA_SDN_Johar_Baru_01_Pagi.xlsx SEED_SEKOLAH="SDN Johar Baru 01 Pagi" npm run db:seed
 npm run dev                   # API :3000 + Vite :5173 (buka http://localhost:5173)
 ```
 
@@ -116,7 +139,7 @@ Unduh cadangan JSON dari menu Pengaturan, atau cadangkan database langsung:
 
 ```
 web/
-  prisma/schema.prisma     tabel: Siswa, Pengguna, Soal, Ujian, SesiUjian, Pelanggaran, Hasil, ...
+  prisma/schema.prisma     tabel: Sekolah, Siswa, Pengguna, Soal, Ujian, SesiUjian, Pelanggaran, Hasil, ...
   prisma/seed.ts           admin pertama + impor Excel lama
   server/
     app.ts                 Express: keamanan (CSP, cookie httpOnly), rute, berkas statis
@@ -125,7 +148,7 @@ web/
     routes/                auth, siswa, admin/*
   src/
     pages/siswa/           Beranda (login), Ujian, Hasil
-    pages/admin/           Dashboard, Monitor, Soal, Ujian, Hasil, Siswa, Pengguna, Pengaturan, Log
+    pages/admin/           Dashboard, Monitor, Soal, Ujian, Hasil, Sekolah, Siswa, Pengguna, Pengaturan, Log
     hooks/usePengawasan.ts layar penuh, anti salin, pindah tab, deteksi wajah
     components/ui/         komponen shadcn/ui
   tests/api.test.ts        tes API terhadap PostgreSQL sungguhan
@@ -136,7 +159,8 @@ web/
 - Kata sandi: scrypt (akun baru) / SHA-256 berulang (akun impor, diperbarui saat login).
 - Sesi login disimpan di database, browser hanya memegang cookie `httpOnly`.
 - Kunci jawaban tidak pernah dikirim ke browser selama ujian.
-- Gambar soal hanya bisa dibuka pengguna yang login; foto pelanggaran hanya oleh guru/admin.
+- Gambar soal hanya bisa dibuka pengguna yang login; foto pelanggaran & tangkapan layar hanya
+  oleh petugas dari sekolah siswa itu (dan admin instansi).
 - Content-Security-Policy hanya mengizinkan sumber dari server sendiri. Ini juga memblokir
   telemetri bawaan MediaPipe ke Google, jadi tidak ada data dari perangkat siswa yang keluar.
 - 5 kali salah kata sandi mengunci login 5 menit (disimpan di memori proses; untuk lebih dari
@@ -146,5 +170,5 @@ web/
 
 ```bash
 createdb simulasi_tka_test     # sekali saja
-npm test                       # 15 skenario API: login, ujian, pelanggaran, admin, ekspor, impor
+npm test                       # 22 skenario API: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor
 ```

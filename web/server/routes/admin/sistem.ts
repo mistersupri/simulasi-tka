@@ -6,24 +6,35 @@ import { galat } from '../../lib/galat.ts';
 import { imporExcel } from '../../lib/imporExcel.ts';
 import { catatLog } from '../../lib/log.ts';
 import { ambilPengaturan, PENGATURAN_DAPAT_DIUBAH, simpanPengaturan } from '../../lib/pengaturan.ts';
-import { butuhStaf } from '../../lib/sesi.ts';
+import { butuhStaf, sekolahStaf } from '../../lib/sesi.ts';
 
 export const rutAdminSistem = Router();
 
-rutAdminSistem.get('/dashboard', butuhStaf(), async (_req, res) => {
+/** Ringkasan. Operator & guru hanya melihat angka sekolahnya. */
+rutAdminSistem.get('/dashboard', butuhStaf(), async (req, res) => {
   const sekarang = new Date();
-  const [siswa, siswaAktif, perKelas, perMapel, jumlahSoal, ujian, hasilAgg, sedangUjian, terbaru] = await Promise.all([
-    prisma.siswa.count(),
-    prisma.siswa.count({ where: { aktif: true } }),
-    prisma.siswa.groupBy({ by: ['kelas'], _count: true, orderBy: { kelas: 'asc' } }),
+  const sekolahId = sekolahStaf(req.staf!);
+  const sk = sekolahId ? { sekolahId } : {};
+  const [siswa, siswaAktif, perKelas, perMapel, jumlahSoal, ujian, hasilAgg, sedangUjian, terbaru, jumlahSekolah] = await Promise.all([
+    prisma.siswa.count({ where: sk }),
+    prisma.siswa.count({ where: { aktif: true, ...sk } }),
+    prisma.siswa.groupBy({ by: ['kelas'], where: sk, _count: true, orderBy: { kelas: 'asc' } }),
     prisma.soal.groupBy({ by: ['mataPelajaran', 'kelas'], _count: true, orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }] }),
     prisma.soal.count(),
-    prisma.ujian.findMany({ select: { aktif: true, waktuMulai: true, waktuSelesai: true } }),
-    prisma.hasil.aggregate({ _count: true, _avg: { nilai: true } }),
-    prisma.sesiUjian.count({ where: { status: 'BERLANGSUNG' } }),
-    prisma.hasil.findMany({ orderBy: { tanggal: 'desc' }, take: 8, select: { id: true, namaSiswa: true, kelas: true, namaUjian: true, nilai: true, tanggal: true } }),
+    prisma.ujian.findMany({
+      where: sekolahId ? { OR: [{ sekolah: { isEmpty: true } }, { sekolah: { has: sekolahId } }] } : {},
+      select: { aktif: true, waktuMulai: true, waktuSelesai: true },
+    }),
+    prisma.hasil.aggregate({ where: sk, _count: true, _avg: { nilai: true } }),
+    prisma.sesiUjian.count({ where: { status: 'BERLANGSUNG', siswa: sk } }),
+    prisma.hasil.findMany({
+      where: sk, orderBy: { tanggal: 'desc' }, take: 8,
+      select: { id: true, namaSiswa: true, kelas: true, namaSekolah: true, namaUjian: true, nilai: true, tanggal: true },
+    }),
+    sekolahId ? Promise.resolve(1) : prisma.sekolah.count({ where: { aktif: true } }),
   ]);
   res.json({
+    jumlahSekolah,
     jumlahSiswa: siswa,
     siswaAktif,
     jumlahSoal,
@@ -48,7 +59,7 @@ rutAdminSistem.get('/pengaturan', butuhStaf('ADMIN'), async (_req, res) => {
 
 rutAdminSistem.put('/pengaturan', butuhStaf('ADMIN'), async (req, res) => {
   const d = z.object({
-    NAMA_SEKOLAH: z.string().trim().min(1, 'Nama sekolah wajib diisi.'),
+    NAMA_SEKOLAH: z.string().trim().min(1, 'Nama instansi wajib diisi.'),
     TAHUN_AJARAN: z.string().trim(),
     PENGUMUMAN: z.string().trim().max(1000),
     KKM: z.coerce.number().int().min(0, 'KKM harus 0 sampai 100.').max(100, 'KKM harus 0 sampai 100.').transform(String),
@@ -77,26 +88,30 @@ rutAdminSistem.delete('/logo', butuhStaf('ADMIN'), async (req, res) => {
   res.json({ pesan: 'Logo dihapus.' });
 });
 
-rutAdminSistem.get('/log', butuhStaf('ADMIN'), async (_req, res) => {
-  res.json(await prisma.logAktivitas.findMany({ orderBy: { waktu: 'desc' }, take: 500 }));
+/** Admin: semua log. Operator: log akun di sekolahnya. */
+rutAdminSistem.get('/log', butuhStaf('ADMIN', 'OPERATOR'), async (req, res) => {
+  const sekolahId = sekolahStaf(req.staf!);
+  res.json(await prisma.logAktivitas.findMany({ where: sekolahId ? { sekolahId } : {}, orderBy: { waktu: 'desc' }, take: 500 }));
 });
 
 /** Cadangan seluruh data (JSON). Kata sandi tetap dalam bentuk hash. */
 rutAdminSistem.get('/backup.json', butuhStaf('ADMIN'), async (req, res) => {
-  const [pengaturan, pengguna, siswa, soal, ujian, hasil, logAktivitas] = await Promise.all([
-    prisma.pengaturan.findMany(), prisma.pengguna.findMany(), prisma.siswa.findMany(), prisma.soal.findMany(),
+  const [pengaturan, sekolah, pengguna, siswa, soal, ujian, hasil, logAktivitas] = await Promise.all([
+    prisma.pengaturan.findMany(), prisma.sekolah.findMany(), prisma.pengguna.findMany(), prisma.siswa.findMany(), prisma.soal.findMany(),
     prisma.ujian.findMany(), prisma.hasil.findMany(), prisma.logAktivitas.findMany({ orderBy: { waktu: 'desc' }, take: 5000 }),
   ]);
   await catatLog(req.staf!, 'BACKUP');
   res.setHeader('Content-Disposition', `attachment; filename="backup-simulasi-tka-${new Date().toISOString().slice(0, 10)}.json"`);
-  res.json({ versi: 1, dibuat: new Date(), pengaturan, pengguna, siswa, soal, ujian, hasil, logAktivitas });
+  res.json({ versi: 2, dibuat: new Date(), pengaturan, sekolah, pengguna, siswa, soal, ujian, hasil, logAktivitas });
 });
 
 rutAdminSistem.post('/impor-excel', butuhStaf('ADMIN'), unggah.single('berkas'), async (req, res) => {
   if (!req.file) throw galat(400, 'Pilih berkas .xlsx terlebih dahulu.');
+  const sekolahId = typeof req.body?.sekolahId === 'string' ? req.body.sekolahId : '';
+  if (sekolahId && !(await prisma.sekolah.findUnique({ where: { id: sekolahId }, select: { id: true } }))) throw galat(400, 'Sekolah tidak ditemukan.');
   let laporan;
   try {
-    laporan = await imporExcel(req.file.buffer);
+    laporan = await imporExcel(req.file.buffer, sekolahId || null);
   } catch (err) {
     if ((err as { status?: number }).status) throw err;
     throw galat(400, 'Berkas tidak dapat dibaca. Pastikan formatnya .xlsx.');

@@ -11,21 +11,34 @@ import {
   finalisasiSesi, petaSoal, selesaikanKadaluarsa, sisaDetik, susunPembahasan, type ItemUrutan, type Jawaban,
 } from '../../lib/mesin.ts';
 import { ambilPengaturan, kkmDari } from '../../lib/pengaturan.ts';
-import { butuhStaf } from '../../lib/sesi.ts';
+import { butuhStaf, filterSekolah, pastikanSekolah, sekolahStaf, type Staf } from '../../lib/sesi.ts';
 import { buatTokenUjian, daftarKelas, normalisasiKunci } from '../../lib/util.ts';
 
+/**
+ * Jadwal ujian, hasil, analisis, dan monitor.
+ * - Admin instansi: semua; hanya admin yang membuat/mengubah jadwal.
+ * - Operator sekolah: melihat jadwal & token, memantau, dan mengelola hasil siswa sekolahnya.
+ * - Guru: hanya hasil & analisis sekolahnya.
+ */
 export const rutAdminUjian = Router();
 rutAdminUjian.use(butuhStaf());
+const hanyaAdmin = butuhStaf('ADMIN');
+const pengawas = butuhStaf('ADMIN', 'OPERATOR');
+
+/** Ujian yang berlaku untuk sekolah tertentu (daftar sekolah kosong = semua sekolah). */
+const ujianUntukSekolah = (sekolahId: string | null) =>
+  sekolahId ? { OR: [{ sekolah: { isEmpty: true } }, { sekolah: { has: sekolahId } }] } : {};
 
 // ------------------------------------------------------------------
 // Jadwal ujian
 // ------------------------------------------------------------------
 
-rutAdminUjian.get('/ujian', async (_req, res) => {
+rutAdminUjian.get('/ujian', pengawas, async (req, res) => {
+  const sekolahId = sekolahStaf(req.staf!);
   const [ujian, soal, peserta] = await Promise.all([
-    prisma.ujian.findMany({ orderBy: { dibuat: 'desc' } }),
+    prisma.ujian.findMany({ where: ujianUntukSekolah(sekolahId), orderBy: { dibuat: 'desc' } }),
     prisma.soal.findMany({ where: { aktif: true }, select: { mataPelajaran: true, kelas: true } }),
-    prisma.hasil.groupBy({ by: ['ujianId'], _count: true }),
+    prisma.hasil.groupBy({ by: ['ujianId'], where: sekolahId ? { sekolahId } : {}, _count: true }),
   ]);
   const jumlahPeserta = new Map(peserta.map((p) => [p.ujianId, p._count]));
   res.json({
@@ -48,6 +61,7 @@ const skemaUjian = z.object({
   nama: z.string().trim().min(1, 'Nama ujian wajib diisi.'),
   mataPelajaran: z.string().trim().min(1, 'Mata pelajaran wajib diisi.'),
   kelas: z.union([z.string(), z.array(z.string())]).default([]).transform(daftarKelas),
+  sekolah: z.array(z.string()).default([]).transform((d) => [...new Set(d.filter(Boolean))]),
   durasiMenit: z.coerce.number().int().min(0).default(60),
   jumlahSoal: z.coerce.number().int().min(0).default(0),
   waktuMulai: z.coerce.date().nullable().default(null),
@@ -72,22 +86,30 @@ const skemaUjian = z.object({
   message: 'Waktu selesai harus setelah waktu mulai.',
 });
 
-rutAdminUjian.post('/ujian', async (req, res) => {
+async function pastikanSekolahAda(ids: string[]) {
+  if (!ids.length) return;
+  const ada = await prisma.sekolah.count({ where: { id: { in: ids } } });
+  if (ada !== ids.length) throw galat(400, 'Ada sekolah peserta yang tidak ditemukan.');
+}
+
+rutAdminUjian.post('/ujian', hanyaAdmin, async (req, res) => {
   const d = skemaUjian.parse(req.body);
+  await pastikanSekolahAda(d.sekolah);
   const u = await prisma.ujian.create({ data: d });
   await catatLog(req.staf!, 'TAMBAH_UJIAN', u.nama);
   res.json({ pesan: 'Ujian ditambahkan.', id: u.id });
 });
 
-rutAdminUjian.put('/ujian/:id', async (req, res) => {
+rutAdminUjian.put('/ujian/:id', hanyaAdmin, async (req, res) => {
   const d = skemaUjian.parse(req.body);
+  await pastikanSekolahAda(d.sekolah);
   const u = await prisma.ujian.update({ where: { id: String(req.params.id) }, data: d }).catch(() => null);
   if (!u) throw galat(404, 'Ujian tidak ditemukan.');
   await catatLog(req.staf!, 'UBAH_UJIAN', u.nama);
   res.json({ pesan: 'Ujian diperbarui.', id: u.id });
 });
 
-rutAdminUjian.delete('/ujian/:id', async (req, res) => {
+rutAdminUjian.delete('/ujian/:id', hanyaAdmin, async (req, res) => {
   const id = String(req.params.id);
   const berjalan = await prisma.sesiUjian.count({ where: { ujianId: id, status: 'BERLANGSUNG' } });
   if (berjalan) throw galat(400, `Masih ada ${berjalan} siswa yang sedang mengerjakan ujian ini.`);
@@ -97,7 +119,7 @@ rutAdminUjian.delete('/ujian/:id', async (req, res) => {
   res.json({ pesan: 'Ujian dihapus. Hasil ujian tetap tersimpan.' });
 });
 
-rutAdminUjian.post('/ujian/:id/token', async (req, res) => {
+rutAdminUjian.post('/ujian/:id/token', hanyaAdmin, async (req, res) => {
   const token = buatTokenUjian();
   const u = await prisma.ujian.update({ where: { id: String(req.params.id) }, data: { token } }).catch(() => null);
   if (!u) throw galat(404, 'Ujian tidak ditemukan.');
@@ -109,9 +131,11 @@ rutAdminUjian.post('/ujian/:id/token', async (req, res) => {
 // Hasil
 // ------------------------------------------------------------------
 
-rutAdminUjian.get('/hasil', async (_req, res) => {
+rutAdminUjian.get('/hasil', async (req, res) => {
   const kkm = kkmDari(await ambilPengaturan());
-  const hasil = await prisma.hasil.findMany({ orderBy: { tanggal: 'desc' }, omit: { jawaban: true } });
+  const hasil = await prisma.hasil.findMany({
+    where: filterSekolah(req.staf!, req.query.sekolahId), orderBy: { tanggal: 'desc' }, omit: { jawaban: true },
+  });
   res.json({ kkm, hasil });
 });
 
@@ -121,6 +145,7 @@ rutAdminUjian.get('/hasil/:id', async (req, res) => {
     include: { sesiUjian: { include: { pelanggaran: { orderBy: { waktu: 'asc' } }, tangkapanLayar: { orderBy: { waktu: 'asc' } } } } },
   });
   if (!h) throw galat(404, 'Hasil tidak ditemukan.');
+  pastikanSekolah(req.staf!, h.sekolahId, 'Hasil tidak ditemukan.');
   const jawaban = h.jawaban as Jawaban;
   // Detail admin memakai huruf asli (o = identitas), bukan huruf acakan siswa.
   const ids = ((h.sesiUjian?.urutan ?? []) as ItemUrutan[]).map((u) => u.i);
@@ -134,20 +159,45 @@ rutAdminUjian.get('/hasil/:id', async (req, res) => {
   });
 });
 
-rutAdminUjian.post('/hasil/hapus', async (req, res) => {
+rutAdminUjian.post('/hasil/hapus', pengawas, async (req, res) => {
   const { ids } = z.object({ ids: z.array(z.string()).min(1) }).parse(req.body);
-  const r = await prisma.hasil.deleteMany({ where: { id: { in: ids } } });
+  const r = await prisma.hasil.deleteMany({ where: { id: { in: ids }, ...filterSekolah(req.staf!) } });
   await catatLog(req.staf!, 'HAPUS_HASIL', `${r.count} hasil`);
   res.json({ pesan: `${r.count} hasil dihapus. Siswa dapat mengerjakan ujian itu lagi.` });
 });
 
-/** Statistik & analisis butir: tingkat kesukaran (p) dan sebaran pilihan. */
-async function analisis(ujianId: string) {
-  const hasil = await prisma.hasil.findMany({ where: { ujianId }, include: { sesiUjian: { select: { urutan: true } } } });
+/** Rata-rata, jumlah tuntas, dsb. untuk satu kelompok nilai. */
+function ringkas(nilai: number[], kkm: number) {
+  return {
+    jumlahPeserta: nilai.length,
+    rataRata: nilai.length ? Math.round((nilai.reduce((a, b) => a + b, 0) / nilai.length) * 10) / 10 : 0,
+    tertinggi: nilai.length ? Math.max(...nilai) : 0,
+    terendah: nilai.length ? Math.min(...nilai) : 0,
+    tuntas: kkm > 0 ? nilai.filter((n) => n >= kkm).length : null,
+  };
+}
+
+/**
+ * Statistik & analisis butir: tingkat kesukaran (p), daya beda (D, kelompok atas-bawah 27%),
+ * dan sebaran pilihan. sekolahId null = semua sekolah (beserta perbandingan antarsekolah).
+ */
+async function analisis(ujianId: string, sekolahId: string | null) {
+  const hasil = await prisma.hasil.findMany({
+    where: { ujianId, ...(sekolahId ? { sekolahId } : {}) },
+    include: { sesiUjian: { select: { urutan: true } } },
+  });
   const kkm = kkmDari(await ambilPengaturan());
   const peta = await petaSoal();
   const nilai = hasil.map((h) => h.nilai);
   const butir = new Map<string, { id: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number> }>();
+
+  // Kelompok atas & bawah (27% nilai tertinggi/terendah) untuk daya beda.
+  const urut = [...hasil].sort((a, b) => b.nilai - a.nilai);
+  const n27 = hasil.length >= 10 ? Math.max(1, Math.round(hasil.length * 0.27)) : 0;
+  const atas = new Set(urut.slice(0, n27).map((h) => h.id));
+  const bawah = new Set(urut.slice(urut.length - n27).map((h) => h.id));
+  const benarAtas = new Map<string, number>();
+  const benarBawah = new Map<string, number>();
 
   for (const h of hasil) {
     const jawaban = h.jawaban as Jawaban;
@@ -159,7 +209,11 @@ async function analisis(ujianId: string) {
       const jawab = normalisasiKunci(jawaban[id], soal.tipe);
       b.peserta++;
       if (!jawab) b.kosong++;
-      else if (jawab === soal.kunci) b.benar++;
+      else if (jawab === soal.kunci) {
+        b.benar++;
+        if (atas.has(h.id)) benarAtas.set(id, (benarAtas.get(id) ?? 0) + 1);
+        if (bawah.has(h.id)) benarBawah.set(id, (benarBawah.get(id) ?? 0) + 1);
+      }
       for (const x of jawab.split(',')) if (x in b.sebaran) b.sebaran[x]++;
       butir.set(id, b);
     }
@@ -168,25 +222,38 @@ async function analisis(ujianId: string) {
   const daftarButir = [...butir.values()]
     .map((b) => {
       const p = b.peserta ? Math.round((b.benar / b.peserta) * 100) : 0;
-      return { ...b, p, kategori: p >= 70 ? 'Mudah' : p >= 30 ? 'Sedang' : 'Sukar' };
+      // D = (benar kelompok atas - benar kelompok bawah) / ukuran kelompok; null bila peserta < 10.
+      const d = n27 ? Math.round((((benarAtas.get(b.id) ?? 0) - (benarBawah.get(b.id) ?? 0)) / n27) * 100) / 100 : null;
+      return {
+        ...b, p, kategori: p >= 70 ? 'Mudah' : p >= 30 ? 'Sedang' : 'Sukar',
+        dayaBeda: d,
+        kategoriDayaBeda: d === null ? null : d >= 0.4 ? 'Sangat baik' : d >= 0.3 ? 'Baik' : d >= 0.2 ? 'Cukup' : 'Perlu diperbaiki',
+      };
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
+  const kelompok = (kunci: (h: (typeof hasil)[number]) => string) => {
+    const peta = new Map<string, number[]>();
+    for (const h of hasil) peta.set(kunci(h), [...(peta.get(kunci(h)) ?? []), h.nilai]);
+    return [...peta.entries()].map(([label, n]) => ({ label, ...ringkas(n, kkm) })).sort((a, b) => b.rataRata - a.rataRata);
+  };
+
   return {
-    jumlahPeserta: hasil.length,
-    rataRata: nilai.length ? Math.round((nilai.reduce((a, b) => a + b, 0) / nilai.length) * 10) / 10 : 0,
-    tertinggi: nilai.length ? Math.max(...nilai) : 0,
-    terendah: nilai.length ? Math.min(...nilai) : 0,
+    ...ringkas(nilai, kkm),
     kkm,
-    tuntas: kkm > 0 ? nilai.filter((n) => n >= kkm).length : null,
+    perSekolah: sekolahId ? [] : kelompok((h) => h.namaSekolah || '(tanpa sekolah)'),
+    perKelas: kelompok((h) => `Kelas ${h.kelas}`).sort((a, b) => a.label.localeCompare(b.label, 'id', { numeric: true })),
     sebaranNilai: Array.from({ length: 10 }, (_, i) => nilai.filter((n) => Math.min(9, Math.floor(n / 10)) === i).length),
     butir: daftarButir,
   };
 }
 
+/** Sekolah yang dianalisis: operator & guru selalu sekolahnya; admin boleh memilih (?sekolahId=). */
+const sekolahAnalisis = (staf: Staf, pilihan: unknown) => filterSekolah(staf, pilihan).sekolahId ?? null;
+
 rutAdminUjian.get('/analisis/:ujianId', async (req, res) => {
   const ujian = await prisma.ujian.findUnique({ where: { id: String(req.params.ujianId) } });
-  res.json({ ujian, analisis: await analisis(String(req.params.ujianId)) });
+  res.json({ ujian, analisis: await analisis(String(req.params.ujianId), sekolahAnalisis(req.staf!, req.query.sekolahId)) });
 });
 
 const labelStatus: Record<Hasil['status'], string> = {
@@ -197,9 +264,10 @@ const labelStatus: Record<Hasil['status'], string> = {
 rutAdminUjian.get('/ekspor.xlsx', async (req, res) => {
   const ujianId = typeof req.query.ujianId === 'string' && req.query.ujianId ? req.query.ujianId : null;
   const kkm = kkmDari(await ambilPengaturan());
+  const sekolahId = sekolahAnalisis(req.staf!, req.query.sekolahId);
   const hasil = await prisma.hasil.findMany({
-    where: ujianId ? { ujianId } : {},
-    orderBy: [{ kelas: 'asc' }, { namaSiswa: 'asc' }],
+    where: { ...(ujianId ? { ujianId } : {}), ...(sekolahId ? { sekolahId } : {}) },
+    orderBy: [{ namaSekolah: 'asc' }, { kelas: 'asc' }, { namaSiswa: 'asc' }],
   });
 
   const wb = new ExcelJS.Workbook();
@@ -212,28 +280,39 @@ rutAdminUjian.get('/ekspor.xlsx', async (req, res) => {
 
   const ws = wb.addWorksheet('Nilai');
   ws.columns = [
-    { header: 'No', width: 5 }, { header: 'NISN', width: 14 }, { header: 'Nama Siswa', width: 28 }, { header: 'Kelas', width: 7 },
+    { header: 'No', width: 5 }, { header: 'Sekolah', width: 28 }, { header: 'NISN', width: 14 }, { header: 'Nama Siswa', width: 28 }, { header: 'Kelas', width: 7 },
     { header: 'Ujian', width: 28 }, { header: 'Mata Pelajaran', width: 18 }, { header: 'Tanggal', width: 18 }, { header: 'Nilai', width: 7 },
     { header: 'Benar', width: 7 }, { header: 'Salah', width: 7 }, { header: 'Kosong', width: 8 }, { header: 'Durasi (menit)', width: 13 },
     { header: 'Pelanggaran', width: 12 }, { header: 'Status', width: 26 }, { header: 'Keterangan', width: 14 },
   ];
   hasil.forEach((h, i) => ws.addRow([
-    i + 1, aman(h.nisn), aman(h.namaSiswa), h.kelas, aman(h.namaUjian), aman(h.mataPelajaran), h.tanggal, h.nilai, h.benar,
+    i + 1, aman(h.namaSekolah), aman(h.nisn), aman(h.namaSiswa), h.kelas, aman(h.namaUjian), aman(h.mataPelajaran), h.tanggal, h.nilai, h.benar,
     h.salah - h.kosong, h.kosong, Math.round(h.durasiDetik / 6) / 10, h.jumlahPelanggaran, labelStatus[h.status],
     kkm > 0 ? (h.nilai >= kkm ? 'Tuntas' : 'Belum tuntas') : '',
   ]));
-  ws.getColumn(7).numFmt = 'dd/mm/yyyy hh:mm';
+  ws.getColumn(8).numFmt = 'dd/mm/yyyy hh:mm';
   tebal(ws);
 
   if (ujianId) {
-    const a = await analisis(ujianId);
+    const a = await analisis(ujianId, sekolahId);
     const wa = wb.addWorksheet('Analisis Butir');
-    wa.columns = ['ID Soal', 'Pertanyaan', 'Kunci', 'Peserta', 'Benar', 'Kosong', '% Benar', 'Kategori', 'Pilih A', 'Pilih B', 'Pilih C', 'Pilih D']
-      .map((header, i) => ({ header, width: i === 1 ? 60 : 10 }));
+    wa.columns = ['ID Soal', 'Pertanyaan', 'Kunci', 'Peserta', 'Benar', 'Kosong', '% Benar', 'Kategori', 'Daya Beda', 'Kategori Daya Beda', 'Pilih A', 'Pilih B', 'Pilih C', 'Pilih D']
+      .map((header, i) => ({ header, width: i === 1 ? 60 : i === 9 ? 18 : 10 }));
     for (const b of a.butir) {
-      wa.addRow([b.id, aman(b.pertanyaan), b.kunci, b.peserta, b.benar, b.kosong, b.p, b.kategori, b.sebaran.A, b.sebaran.B, b.sebaran.C, b.sebaran.D]);
+      wa.addRow([b.id, aman(b.pertanyaan), b.kunci, b.peserta, b.benar, b.kosong, b.p, b.kategori, b.dayaBeda ?? '', b.kategoriDayaBeda ?? '', b.sebaran.A, b.sebaran.B, b.sebaran.C, b.sebaran.D]);
     }
     tebal(wa);
+
+    const rekap = (judul: string, baris: (ReturnType<typeof ringkas> & { label: string })[]) => {
+      if (!baris.length) return;
+      const w = wb.addWorksheet(judul);
+      w.columns = [judul === 'Per Sekolah' ? 'Sekolah' : 'Kelas', 'Peserta', 'Rata-rata', 'Tertinggi', 'Terendah', 'Tuntas']
+        .map((header, i) => ({ header, width: i === 0 ? 34 : 11 }));
+      for (const r of baris) w.addRow([aman(r.label), r.jumlahPeserta, r.rataRata, r.tertinggi, r.terendah, r.tuntas ?? '']);
+      tebal(w);
+    };
+    rekap('Per Sekolah', a.perSekolah);
+    rekap('Per Kelas', a.perKelas);
   }
 
   await catatLog(req.staf!, 'EKSPOR_HASIL', ujianId ?? 'semua');
@@ -247,12 +326,12 @@ rutAdminUjian.get('/ekspor.xlsx', async (req, res) => {
 // Monitor peserta yang sedang ujian
 // ------------------------------------------------------------------
 
-rutAdminUjian.get('/monitor', async (_req, res) => {
+rutAdminUjian.get('/monitor', pengawas, async (req, res) => {
   await selesaikanKadaluarsa();
   const sesi = await prisma.sesiUjian.findMany({
-    where: { status: 'BERLANGSUNG' },
+    where: { status: 'BERLANGSUNG', siswa: filterSekolah(req.staf!, req.query.sekolahId) },
     include: {
-      siswa: { select: { nama: true, kelas: true, username: true } },
+      siswa: { select: { nama: true, kelas: true, username: true, sekolah: { select: { nama: true } } } },
       ujian: { select: { nama: true, maksPelanggaran: true } },
       pelanggaran: { orderBy: { waktu: 'desc' }, take: 1 },
       tangkapanLayar: { orderBy: { waktu: 'desc' }, take: 1 },
@@ -266,6 +345,7 @@ rutAdminUjian.get('/monitor', async (_req, res) => {
       nama: s.siswa.nama,
       kelas: s.siswa.kelas,
       username: s.siswa.username,
+      namaSekolah: s.siswa.sekolah.nama,
       namaUjian: s.ujian.nama,
       jumlahSoal: (s.urutan as ItemUrutan[]).length,
       terjawab: Object.keys(s.jawaban as Jawaban).length,
@@ -281,27 +361,46 @@ rutAdminUjian.get('/monitor', async (_req, res) => {
   });
 });
 
-rutAdminUjian.get('/sesi/:id/pelanggaran', async (req, res) => {
-  res.json(await prisma.pelanggaran.findMany({ where: { sesiUjianId: String(req.params.id) }, orderBy: { waktu: 'asc' } }));
+/** Sesi ujian dalam cakupan staf (operator: siswa sekolahnya). */
+async function sesiTerjangkau(staf: Staf, id: string) {
+  const sesi = await prisma.sesiUjian.findUnique({ where: { id }, include: { siswa: true } });
+  if (!sesi) throw galat(404, 'Sesi tidak ditemukan.');
+  pastikanSekolah(staf, sesi.siswa.sekolahId, 'Sesi tidak ditemukan.');
+  return sesi;
+}
+
+rutAdminUjian.get('/sesi/:id/pelanggaran', pengawas, async (req, res) => {
+  const sesi = await sesiTerjangkau(req.staf!, String(req.params.id));
+  res.json(await prisma.pelanggaran.findMany({ where: { sesiUjianId: sesi.id }, orderBy: { waktu: 'asc' } }));
 });
 
-rutAdminUjian.get('/sesi/:id/layar', async (req, res) => {
-  res.json(await prisma.tangkapanLayar.findMany({ where: { sesiUjianId: String(req.params.id) }, orderBy: { waktu: 'asc' } }));
+rutAdminUjian.get('/sesi/:id/layar', pengawas, async (req, res) => {
+  const sesi = await sesiTerjangkau(req.staf!, String(req.params.id));
+  res.json(await prisma.tangkapanLayar.findMany({ where: { sesiUjianId: sesi.id }, orderBy: { waktu: 'asc' } }));
 });
 
-rutAdminUjian.get('/berkas/layar/:nama', (req, res) => {
-  kirimBerkas(res, 'layar', String(req.params.nama));
+// Foto pelanggaran & tangkapan layar: hanya untuk staf yang berhak atas sekolah siswa itu.
+rutAdminUjian.get('/berkas/layar/:nama', async (req, res) => {
+  const nama = String(req.params.nama);
+  const t = await prisma.tangkapanLayar.findFirst({ where: { berkas: nama }, select: { sesiUjian: { select: { siswa: { select: { sekolahId: true } } } } } });
+  if (!t) throw galat(404, 'Berkas tidak ditemukan.');
+  pastikanSekolah(req.staf!, t.sesiUjian.siswa.sekolahId, 'Berkas tidak ditemukan.');
+  kirimBerkas(res, 'layar', nama);
 });
 
-rutAdminUjian.get('/berkas/pelanggaran/:nama', (req, res) => {
-  kirimBerkas(res, 'pelanggaran', String(req.params.nama));
+rutAdminUjian.get('/berkas/pelanggaran/:nama', async (req, res) => {
+  const nama = String(req.params.nama);
+  const p = await prisma.pelanggaran.findFirst({ where: { foto: nama }, select: { sesiUjian: { select: { siswa: { select: { sekolahId: true } } } } } });
+  if (!p) throw galat(404, 'Berkas tidak ditemukan.');
+  pastikanSekolah(req.staf!, p.sesiUjian.siswa.sekolahId, 'Berkas tidak ditemukan.');
+  kirimBerkas(res, 'pelanggaran', nama);
 });
 
 /** KIRIM = paksa selesai, RESET = hapus sesi (siswa mulai ulang), TAMBAH_WAKTU = tambah menit. */
-rutAdminUjian.post('/sesi/:id/aksi', async (req, res) => {
+rutAdminUjian.post('/sesi/:id/aksi', pengawas, async (req, res) => {
   const { aksi, menit } = z.object({ aksi: z.enum(['KIRIM', 'RESET', 'TAMBAH_WAKTU']), menit: z.coerce.number().int().min(1).max(240).default(10) }).parse(req.body);
-  const sesi = await prisma.sesiUjian.findUnique({ where: { id: String(req.params.id) }, include: { siswa: true } });
-  if (!sesi || sesi.status !== 'BERLANGSUNG') throw galat(404, 'Sesi tidak ditemukan atau sudah selesai.');
+  const sesi = await sesiTerjangkau(req.staf!, String(req.params.id));
+  if (sesi.status !== 'BERLANGSUNG') throw galat(404, 'Sesi tidak ditemukan atau sudah selesai.');
 
   if (aksi === 'KIRIM') {
     const r = await finalisasiSesi(sesi.id, null, 'DIHENTIKAN');

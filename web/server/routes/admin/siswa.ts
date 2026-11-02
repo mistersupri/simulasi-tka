@@ -4,11 +4,12 @@ import { prisma } from '../../db.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
 import { hashPassword } from '../../lib/password.ts';
-import { butuhStaf } from '../../lib/sesi.ts';
+import { butuhStaf, filterSekolah, pastikanSekolah, type Staf } from '../../lib/sesi.ts';
 import { buatPasswordAcak, normalisasiKelas, teks } from '../../lib/util.ts';
 
+/** Data siswa. Operator sekolah hanya melihat & mengubah siswa sekolahnya; admin instansi semua sekolah. */
 export const rutAdminSiswa = Router();
-rutAdminSiswa.use(butuhStaf('ADMIN'));
+rutAdminSiswa.use(butuhStaf('ADMIN', 'OPERATOR'));
 
 const MAKS_PER_PROSES = 50;
 const usernameSah = z.string().trim().toLowerCase()
@@ -32,13 +33,39 @@ async function usernameOtomatis(nama: string, terpakai: Set<string>) {
   throw galat(500, `Gagal membuat username untuk ${nama}.`);
 }
 
-const tampil = (s: { id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: Date | null }) =>
-  ({ id: s.id, nisn: s.nisn, nama: s.nama, kelas: s.kelas, username: s.username, aktif: s.aktif, loginTerakhir: s.loginTerakhir });
+type BarisSiswa = {
+  id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: Date | null;
+  sekolahId: string; sekolah: { nama: string };
+};
+const tampil = (s: BarisSiswa) => ({
+  id: s.id, nisn: s.nisn, nama: s.nama, kelas: s.kelas, username: s.username, aktif: s.aktif, loginTerakhir: s.loginTerakhir,
+  sekolahId: s.sekolahId, namaSekolah: s.sekolah.nama,
+});
 
-rutAdminSiswa.get('/', async (_req, res) => {
-  const siswa = await prisma.siswa.findMany({ orderBy: [{ kelas: 'asc' }, { nama: 'asc' }] });
+rutAdminSiswa.get('/', async (req, res) => {
+  const siswa = await prisma.siswa.findMany({
+    where: filterSekolah(req.staf!, req.query.sekolahId),
+    include: { sekolah: { select: { nama: true } } },
+    orderBy: [{ kelas: 'asc' }, { nama: 'asc' }],
+  });
   res.json(siswa.map(tampil));
 });
+
+/** Sekolah tujuan: operator selalu sekolahnya sendiri; admin wajib memilih. */
+async function sekolahTujuan(staf: Staf, pilihan: string | null | undefined) {
+  if (staf.peran !== 'ADMIN') return staf.sekolahId!;
+  if (!pilihan) throw galat(400, 'Pilih sekolah siswa.');
+  if (!(await prisma.sekolah.findUnique({ where: { id: pilihan }, select: { id: true } }))) throw galat(400, 'Sekolah tidak ditemukan.');
+  return pilihan;
+}
+
+const namaSekolah = async (id: string) => (await prisma.sekolah.findUnique({ where: { id }, select: { nama: true } }))?.nama ?? '';
+
+/** Hanya id siswa yang termasuk cakupan staf. */
+async function idTerjangkau(staf: Staf, ids: string[]) {
+  const ada = await prisma.siswa.findMany({ where: { id: { in: ids }, ...filterSekolah(staf) }, select: { id: true } });
+  return ada.map((s) => s.id);
+}
 
 const skemaSiswa = z.object({
   nisn: z.string().trim().default(''),
@@ -47,28 +74,33 @@ const skemaSiswa = z.object({
   username: z.string().trim().default(''),
   password: z.string().default(''),
   aktif: z.boolean().default(true),
+  sekolahId: z.string().nullish(),
 });
 
 rutAdminSiswa.post('/', async (req, res) => {
   const d = skemaSiswa.parse(req.body);
   const username = d.username ? usernameSah.parse(d.username) : await usernameOtomatis(d.nama, new Set());
   if (await usernameDipakai(username)) throw galat(400, `Username ${username} sudah dipakai.`);
+  const sekolahId = await sekolahTujuan(req.staf!, d.sekolahId);
   const password = d.password || buatPasswordAcak();
   await prisma.siswa.create({
-    data: { nisn: d.nisn, nama: d.nama, kelas: d.kelas, username, aktif: d.aktif, passwordHash: await hashPassword(password) },
+    data: { nisn: d.nisn, nama: d.nama, kelas: d.kelas, username, sekolahId, aktif: d.aktif, passwordHash: await hashPassword(password) },
   });
   await catatLog(req.staf!, 'TAMBAH_SISWA', username);
-  res.json({ pesan: 'Siswa ditambahkan.', akun: [{ nama: d.nama, kelas: d.kelas, username, password }] });
+  res.json({ pesan: 'Siswa ditambahkan.', akun: [{ nama: d.nama, kelas: d.kelas, username, password, sekolah: await namaSekolah(sekolahId) }] });
 });
 
 rutAdminSiswa.put('/:id', async (req, res) => {
   const d = skemaSiswa.parse(req.body);
   const lama = await prisma.siswa.findUnique({ where: { id: String(req.params.id) } });
   if (!lama) throw galat(404, 'Siswa tidak ditemukan.');
+  pastikanSekolah(req.staf!, lama.sekolahId, 'Siswa tidak ditemukan.');
+  // Admin boleh memindahkan siswa ke sekolah lain; operator tidak.
+  const sekolahId = req.staf!.peran === 'ADMIN' && d.sekolahId ? await sekolahTujuan(req.staf!, d.sekolahId) : lama.sekolahId;
   await prisma.siswa.update({
     where: { id: lama.id },
     data: {
-      nisn: d.nisn, nama: d.nama, kelas: d.kelas, aktif: d.aktif,
+      nisn: d.nisn, nama: d.nama, kelas: d.kelas, aktif: d.aktif, sekolahId,
       ...(d.password ? { passwordHash: await hashPassword(d.password) } : {}),
     },
   });
@@ -80,14 +112,16 @@ rutAdminSiswa.put('/:id', async (req, res) => {
 const skemaIds = z.object({ ids: z.array(z.string()).min(1, 'Pilih minimal satu siswa.') });
 
 rutAdminSiswa.post('/hapus', async (req, res) => {
-  const { ids } = skemaIds.parse(req.body);
+  const ids = await idTerjangkau(req.staf!, skemaIds.parse(req.body).ids);
   const r = await prisma.siswa.deleteMany({ where: { id: { in: ids } } });
   await catatLog(req.staf!, 'HAPUS_SISWA', `${r.count} siswa`);
   res.json({ pesan: `${r.count} siswa dihapus. Hasil ujian mereka tetap tersimpan.` });
 });
 
 rutAdminSiswa.post('/status', async (req, res) => {
-  const { ids, aktif } = skemaIds.extend({ aktif: z.boolean() }).parse(req.body);
+  const d = skemaIds.extend({ aktif: z.boolean() }).parse(req.body);
+  const { aktif } = d;
+  const ids = await idTerjangkau(req.staf!, d.ids);
   await prisma.siswa.updateMany({ where: { id: { in: ids } }, data: { aktif } });
   if (!aktif) await prisma.sesiLogin.deleteMany({ where: { siswaId: { in: ids } } });
   await catatLog(req.staf!, aktif ? 'AKTIFKAN_SISWA' : 'NONAKTIFKAN_SISWA', `${ids.length} siswa`);
@@ -95,14 +129,14 @@ rutAdminSiswa.post('/status', async (req, res) => {
 });
 
 rutAdminSiswa.post('/reset-password', async (req, res) => {
-  const { ids } = skemaIds.parse(req.body);
+  const ids = await idTerjangkau(req.staf!, skemaIds.parse(req.body).ids);
   if (ids.length > MAKS_PER_PROSES) throw galat(400, `Maksimal ${MAKS_PER_PROSES} siswa per proses.`);
-  const siswa = await prisma.siswa.findMany({ where: { id: { in: ids } }, orderBy: [{ kelas: 'asc' }, { nama: 'asc' }] });
+  const siswa = await prisma.siswa.findMany({ where: { id: { in: ids } }, orderBy: [{ kelas: 'asc' }, { nama: 'asc' }], include: { sekolah: { select: { nama: true } } } });
   const akun = [];
   for (const s of siswa) {
     const password = buatPasswordAcak();
     await prisma.siswa.update({ where: { id: s.id }, data: { passwordHash: await hashPassword(password) } });
-    akun.push({ nama: s.nama, kelas: s.kelas, username: s.username, password });
+    akun.push({ nama: s.nama, kelas: s.kelas, username: s.username, password, sekolah: s.sekolah.nama });
   }
   await prisma.sesiLogin.deleteMany({ where: { siswaId: { in: ids } } });
   await catatLog(req.staf!, 'RESET_PASSWORD_SISWA', `${akun.length} siswa`);
@@ -110,13 +144,16 @@ rutAdminSiswa.post('/reset-password', async (req, res) => {
 });
 
 rutAdminSiswa.post('/impor', async (req, res) => {
-  const { baris } = z.object({
+  const { baris, sekolahId: pilihan } = z.object({
+    sekolahId: z.string().nullish(),
     baris: z.array(z.object({
       nomor: z.number(), nisn: z.string().default(''), nama: z.string().default(''),
       kelas: z.string().default(''), username: z.string().default(''), password: z.string().default(''),
     })).max(MAKS_PER_PROSES, `Maksimal ${MAKS_PER_PROSES} baris per proses.`),
   }).parse(req.body);
 
+  const sekolahId = await sekolahTujuan(req.staf!, pilihan);
+  const sekolah = await namaSekolah(sekolahId);
   const akun = [];
   const ditolak = [];
   const terpakai = new Set<string>();
@@ -129,9 +166,9 @@ rutAdminSiswa.post('/impor', async (req, res) => {
       const username = usernameMentah ? usernameSah.parse(usernameMentah) : await usernameOtomatis(nama, terpakai);
       if (terpakai.has(username) || (await usernameDipakai(username))) throw galat(400, `Username ${username} sudah dipakai.`);
       const password = teks(b.password) || buatPasswordAcak();
-      await prisma.siswa.create({ data: { nisn: teks(b.nisn), nama, kelas, username, passwordHash: await hashPassword(password) } });
+      await prisma.siswa.create({ data: { nisn: teks(b.nisn), nama, kelas, username, sekolahId, passwordHash: await hashPassword(password) } });
       terpakai.add(username);
-      akun.push({ nama, kelas, username, password });
+      akun.push({ nama, kelas, username, password, sekolah });
     } catch (err) {
       const pesan = err instanceof z.ZodError ? err.issues[0]?.message : (err as Error).message;
       ditolak.push({ nomor: b.nomor, nama: b.nama, alasan: pesan });

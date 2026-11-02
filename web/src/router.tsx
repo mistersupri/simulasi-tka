@@ -31,6 +31,7 @@ export const router = createBrowserRouter([
       { path: 'soal', ...admin(() => import('@/pages/admin/Soal')) },
       { path: 'ujian', ...admin(() => import('@/pages/admin/Ujian')) },
       { path: 'hasil', ...admin(() => import('@/pages/admin/Hasil')) },
+      { path: 'sekolah', ...admin(() => import('@/pages/admin/Sekolah')) },
       { path: 'siswa', ...admin(() => import('@/pages/admin/Siswa')) },
       { path: 'pengguna', ...admin(() => import('@/pages/admin/Pengguna')) },
       { path: 'pengaturan', ...admin(() => import('@/pages/admin/Pengaturan')) },

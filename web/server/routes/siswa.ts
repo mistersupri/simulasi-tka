@@ -27,6 +27,10 @@ function statusUjian(u: Ujian, jumlahSelesai: number, berjalan: boolean): Status
   return 'TERSEDIA';
 }
 
+/** Ujian berlaku untuk siswa ini: kelas cocok dan sekolahnya termasuk peserta. */
+const ujianUntuk = (u: Ujian, siswa: { kelas: string; sekolahId: string }) =>
+  kelasCocok(u.kelas, siswa.kelas) && (u.sekolah.length === 0 || u.sekolah.includes(siswa.sekolahId));
+
 const PESAN_WAJIB_APLIKASI = 'Ujian ini hanya bisa dikerjakan lewat aplikasi ujian sekolah di komputer lab.';
 
 function pastikanAplikasi(req: Request, ujian: Ujian) {
@@ -51,7 +55,7 @@ rutSiswa.get('/beranda', async (req, res) => {
   ]);
 
   const ujian = [];
-  for (const u of semuaUjian.filter((x) => kelasCocok(x.kelas, siswa.kelas))) {
+  for (const u of semuaUjian.filter((x) => ujianUntuk(x, siswa))) {
     const tersedia = (await soalAktifUntuk(u.mataPelajaran, siswa.kelas)).length;
     const sesi = berjalan.find((s) => s.ujianId === u.id);
     if (!tersedia && !sesi) continue;
@@ -126,7 +130,7 @@ rutSiswa.post('/ujian/:ujianId/mulai', async (req, res) => {
   await selesaikanKadaluarsa(siswa.id);
 
   const ujian = await prisma.ujian.findUnique({ where: { id: String(req.params.ujianId) } });
-  if (!ujian || !ujian.aktif || !kelasCocok(ujian.kelas, siswa.kelas)) throw galat(404, 'Ujian tidak ditemukan.');
+  if (!ujian || !ujian.aktif || !ujianUntuk(ujian, siswa)) throw galat(404, 'Ujian tidak ditemukan.');
   pastikanAplikasi(req, ujian);
 
   // Lanjutkan ujian yang belum selesai (mis. koneksi putus).

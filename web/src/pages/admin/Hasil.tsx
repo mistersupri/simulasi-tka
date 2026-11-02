@@ -2,7 +2,9 @@ import { ChartBar, DownloadSimple, FileXls, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { BilahPilihan, KepalaHalaman, LABEL_STATUS_HASIL, usePilihan } from '@/components/admin';
+import {
+  BilahPilihan, KepalaHalaman, LABEL_STATUS_HASIL, PilihSekolah, SEMUA_SEKOLAH, paramSekolah, usePilihan, useStaf,
+} from '@/components/admin';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { Badge } from '@/components/ui/badge';
@@ -24,9 +26,16 @@ const SEMUA = 'semua';
 
 export default function HalamanHasil() {
   const qc = useQueryClient();
+  const staf = useStaf();
+  const admin = staf.peran === 'ADMIN';
+  // Guru hanya melihat; hapus hasil (agar siswa mengulang) untuk admin & operator.
+  const bolehHapus = staf.peran !== 'GURU';
   const [konfirmasi, dialog] = useKonfirmasi();
-  const hasil = useQuery({ queryKey: ['hasil-admin'], queryFn: () => api.get<{ kkm: number; hasil: Hasil[] }>('/admin/hasil') });
-  const ujian = useQuery({ queryKey: ['ujian'], queryFn: () => api.get<{ ujian: Ujian[] }>('/admin/ujian') });
+  const [sekolah, setSekolah] = useState(SEMUA_SEKOLAH);
+  const hasil = useQuery({
+    queryKey: ['hasil-admin', sekolah],
+    queryFn: () => api.get<{ kkm: number; hasil: Hasil[] }>(`/admin/hasil${paramSekolah(sekolah)}`),
+  });
   const [cari, setCari] = useState('');
   const [ujianId, setUjianId] = useState(SEMUA);
   const [kelas, setKelas] = useState(SEMUA);
@@ -35,6 +44,8 @@ export default function HalamanHasil() {
 
   const semua = hasil.data?.hasil ?? [];
   const kkm = hasil.data?.kkm ?? 0;
+  // Daftar ujian diambil dari hasil, sehingga guru tidak perlu akses ke jadwal.
+  const daftarUjian = useMemo(() => [...new Map(semua.filter((h) => h.ujianId).map((h) => [h.ujianId!, h.namaUjian])).entries()], [semua]);
   const daftarKelas = useMemo(() => [...new Set(semua.map((h) => h.kelas))].sort((a, b) => a.localeCompare(b, 'id', { numeric: true })), [semua]);
   const data = useMemo(() => semua.filter((h) =>
     (ujianId === SEMUA || h.ujianId === ujianId) && (kelas === SEMUA || h.kelas === kelas) &&
@@ -51,21 +62,28 @@ export default function HalamanHasil() {
 
   return (
     <>
-      <KepalaHalaman judul="Hasil & analisis" keterangan={rata === null ? undefined : `${data.length} hasil · rata-rata ${rata}`}>
+      <KepalaHalaman
+        judul="Hasil & analisis"
+        keterangan={<>
+          {!admin && <>{staf.namaSekolah}{rata !== null && ' · '}</>}
+          {rata !== null && `${data.length} hasil · rata-rata ${rata}`}
+        </>}
+      >
         <Button variant="outline" disabled={!data.length} onClick={() => unduhCsv('hasil-ujian.csv', [
-          ['Tanggal', 'NISN', 'Nama', 'Kelas', 'Ujian', 'Nilai', 'Benar', 'Salah', 'Kosong', 'Durasi (detik)', 'Pelanggaran', 'Status'],
-          ...data.map((h) => [formatTanggal(h.tanggal), h.nisn, h.namaSiswa, h.kelas, h.namaUjian, h.nilai, h.benar, h.salah - h.kosong, h.kosong, h.durasiDetik, h.jumlahPelanggaran, LABEL_STATUS_HASIL[h.status].label]),
+          ['Tanggal', 'Sekolah', 'NISN', 'Nama', 'Kelas', 'Ujian', 'Nilai', 'Benar', 'Salah', 'Kosong', 'Durasi (detik)', 'Pelanggaran', 'Status'],
+          ...data.map((h) => [formatTanggal(h.tanggal), h.namaSekolah, h.nisn, h.namaSiswa, h.kelas, h.namaUjian, h.nilai, h.benar, h.salah - h.kosong, h.kosong, h.durasiDetik, h.jumlahPelanggaran, LABEL_STATUS_HASIL[h.status].label]),
         ])}><DownloadSimple /> CSV</Button>
-        <a className={buttonVariants()} href={`/api/admin/ekspor.xlsx${ujianId !== SEMUA ? `?ujianId=${ujianId}` : ''}`} download>
+        <a className={buttonVariants()} href={`/api/admin/ekspor.xlsx?${new URLSearchParams({ ...(ujianId !== SEMUA ? { ujianId } : {}), ...(sekolah !== SEMUA_SEKOLAH ? { sekolahId: sekolah } : {}) })}`} download>
           <FileXls /> Unduh Excel
         </a>
       </KepalaHalaman>
 
+      {admin && <div className="mb-2 max-w-sm"><PilihSekolah nilai={sekolah} ubah={setSekolah} semua label="Saring sekolah" /></div>}
       <div className="mb-4 grid gap-2 sm:grid-cols-[2fr_1.5fr_1fr_auto]">
         <Input type="search" placeholder="Cari nama atau NISN..." aria-label="Cari siswa" value={cari} onChange={(e) => setCari(e.target.value)} />
         <Select value={ujianId} onValueChange={setUjianId}>
           <SelectTrigger aria-label="Saring ujian"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value={SEMUA}>Semua ujian</SelectItem>{ujian.data?.ujian.map((u) => <SelectItem key={u.id} value={u.id}>{u.nama}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value={SEMUA}>Semua ujian</SelectItem>{daftarUjian.map(([id, nama]) => <SelectItem key={id} value={id}>{nama}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={kelas} onValueChange={setKelas}>
           <SelectTrigger aria-label="Saring kelas"><SelectValue /></SelectTrigger>
@@ -76,7 +94,7 @@ export default function HalamanHasil() {
         </Button>
       </div>
 
-      <BilahPilihan jumlah={pilihan.dipilih.size}>
+      <BilahPilihan jumlah={bolehHapus ? pilihan.dipilih.size : 0}>
         <Button size="sm" variant="destructive" onClick={async () => {
           if (await konfirmasi({ judul: `Hapus ${pilihan.dipilih.size} hasil?`, pesan: 'Siswa tersebut dapat mengerjakan ujiannya lagi.', ya: 'Hapus', bahaya: true })) hapus.mutate();
         }}><Trash /> Hapus agar bisa mengulang</Button>
@@ -88,7 +106,7 @@ export default function HalamanHasil() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10"><Checkbox aria-label="Pilih semua hasil" checked={pilihan.semua} onCheckedChange={(v) => pilihan.ubahSemua(!!v)} /></TableHead>
+              {bolehHapus && <TableHead className="w-10"><Checkbox aria-label="Pilih semua hasil" checked={pilihan.semua} onCheckedChange={(v) => pilihan.ubahSemua(!!v)} /></TableHead>}
               <TableHead>Siswa</TableHead><TableHead>Ujian</TableHead><TableHead>Nilai</TableHead><TableHead>B / S / K</TableHead><TableHead>Status</TableHead><TableHead><span className="sr-only">Aksi</span></TableHead>
             </TableRow>
           </TableHeader>
@@ -97,8 +115,13 @@ export default function HalamanHasil() {
               const st = LABEL_STATUS_HASIL[h.status];
               return (
                 <TableRow key={h.id} data-state={pilihan.dipilih.has(h.id) ? 'selected' : undefined}>
-                  <TableCell><Checkbox aria-label={`Pilih hasil ${h.namaSiswa}`} checked={pilihan.dipilih.has(h.id)} onCheckedChange={(v) => pilihan.ubah(h.id, !!v)} /></TableCell>
-                  <TableCell><b>{h.namaSiswa}</b><div className="text-xs text-muted-foreground">Kelas {h.kelas} · {formatTanggal(h.tanggal)}</div></TableCell>
+                  {bolehHapus && <TableCell><Checkbox aria-label={`Pilih hasil ${h.namaSiswa}`} checked={pilihan.dipilih.has(h.id)} onCheckedChange={(v) => pilihan.ubah(h.id, !!v)} /></TableCell>}
+                  <TableCell>
+                    <b>{h.namaSiswa}</b>
+                    <div className="text-xs text-muted-foreground">
+                      {admin && sekolah === SEMUA_SEKOLAH && <>{h.namaSekolah || 'Tanpa sekolah'} · </>}Kelas {h.kelas} · {formatTanggal(h.tanggal)}
+                    </div>
+                  </TableCell>
                   <TableCell>{h.namaUjian}</TableCell>
                   <TableCell>
                     <span className={cn('text-xl font-semibold tabular-nums', kkm > 0 && (h.nilai >= kkm ? 'text-hijau' : 'text-merah'))}>{h.nilai}</span>
@@ -118,7 +141,7 @@ export default function HalamanHasil() {
         </Table>
       )}
       <DialogDetail id={detail} kkm={kkm} tutup={() => setDetail(null)} />
-      <DialogAnalisis ujianId={analisis} tutup={() => setAnalisis(null)} />
+      <DialogAnalisis ujianId={analisis} sekolahId={sekolah} tutup={() => setAnalisis(null)} />
       {dialog}
     </>
   );
@@ -174,16 +197,52 @@ function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutu
   );
 }
 
+type Ringkasan = { label: string; jumlahPeserta: number; rataRata: number; tertinggi: number; terendah: number; tuntas: number | null };
 type Analisis = {
   jumlahPeserta: number; rataRata: number; tertinggi: number; terendah: number; kkm: number; tuntas: number | null;
-  sebaranNilai: number[];
-  butir: { id: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number>; p: number; kategori: string }[];
+  sebaranNilai: number[]; perSekolah: Ringkasan[]; perKelas: Ringkasan[];
+  butir: {
+    id: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number>; p: number; kategori: string;
+    dayaBeda: number | null; kategoriDayaBeda: string | null;
+  }[];
 };
 
-export function DialogAnalisis({ ujianId, tutup }: { ujianId: string | null; tutup: () => void }) {
+function TabelRingkasan({ judul, kolom, baris, kkm }: { judul: string; kolom: string; baris: Ringkasan[]; kkm: number }) {
+  if (baris.length < 2) return null;
+  return (
+    <>
+      <h3 className="mt-6 text-base">{judul}</h3>
+      <Table className="mt-3">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{kolom}</TableHead><TableHead className="text-right">Peserta</TableHead><TableHead className="text-right">Rata-rata</TableHead>
+            <TableHead className="text-right">Tertinggi</TableHead><TableHead className="text-right">Terendah</TableHead>{kkm > 0 && <TableHead className="text-right">Tuntas</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {baris.map((r) => (
+            <TableRow key={r.label}>
+              <TableCell className="font-semibold">{r.label}</TableCell>
+              <TableCell className="text-right tabular-nums">{r.jumlahPeserta}</TableCell>
+              <TableCell className={cn('text-right font-semibold tabular-nums', kkm > 0 && (r.rataRata >= kkm ? 'text-hijau' : 'text-merah'))}>{r.rataRata}</TableCell>
+              <TableCell className="text-right tabular-nums">{r.tertinggi}</TableCell>
+              <TableCell className="text-right tabular-nums">{r.terendah}</TableCell>
+              {kkm > 0 && <TableCell className="text-right tabular-nums">{r.tuntas} ({Math.round(((r.tuntas ?? 0) / r.jumlahPeserta) * 100)}%)</TableCell>}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </>
+  );
+}
+
+const VARIAN_DAYA_BEDA: Record<string, 'hijau' | 'biru' | 'kuning' | 'merah'> = { 'Sangat baik': 'hijau', Baik: 'biru', Cukup: 'kuning', 'Perlu diperbaiki': 'merah' };
+
+/** sekolahId: saringan admin instansi; operator & guru selalu dibatasi ke sekolahnya oleh server. */
+export function DialogAnalisis({ ujianId, sekolahId, tutup }: { ujianId: string | null; sekolahId?: string; tutup: () => void }) {
   const q = useQuery({
-    queryKey: ['analisis', ujianId],
-    queryFn: () => api.get<{ ujian: Ujian | null; analisis: Analisis }>(`/admin/analisis/${ujianId}`),
+    queryKey: ['analisis', ujianId, sekolahId ?? ''],
+    queryFn: () => api.get<{ ujian: Ujian | null; analisis: Analisis }>(`/admin/analisis/${ujianId}${paramSekolah(sekolahId ?? '')}`),
     enabled: !!ujianId,
   });
   const a = q.data?.analisis;
@@ -211,10 +270,16 @@ export function DialogAnalisis({ ujianId, tutup }: { ujianId: string | null; tut
                   </div>
                 ))}
               </div>
+              <TabelRingkasan judul="Perbandingan antarsekolah" kolom="Sekolah" baris={a.perSekolah} kkm={a.kkm} />
+              <TabelRingkasan judul="Per kelas" kolom="Kelas" baris={a.perKelas} kkm={a.kkm} />
               <h3 className="mt-6 text-base">Analisis butir soal</h3>
-              <p className="text-sm text-muted-foreground">Benar ≥ 70%: mudah, 30 sampai 69%: sedang, di bawah 30%: sukar. Pengecoh yang tidak pernah dipilih perlu ditinjau ulang.</p>
+              <p className="text-sm text-muted-foreground">
+                Tingkat kesukaran: benar ≥ 70% mudah, 30 sampai 69% sedang, di bawah 30% sukar.
+                Daya beda membandingkan 27% siswa nilai tertinggi dengan 27% terendah (minimal 10 peserta): di bawah 0,20 berarti soal kurang membedakan siswa yang paham dan yang belum.
+                Pengecoh yang tidak pernah dipilih perlu ditinjau ulang.
+              </p>
               <Table className="mt-3">
-                <TableHeader><TableRow><TableHead>Soal</TableHead><TableHead>Kunci</TableHead><TableHead>% benar</TableHead><TableHead>Kategori</TableHead><TableHead>A / B / C / D</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Soal</TableHead><TableHead>Kunci</TableHead><TableHead>% benar</TableHead><TableHead>Kesukaran</TableHead><TableHead>Daya beda</TableHead><TableHead>A / B / C / D</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {a.butir.map((b) => (
                     <TableRow key={b.id}>
@@ -222,6 +287,11 @@ export function DialogAnalisis({ ujianId, tutup }: { ujianId: string | null; tut
                       <TableCell className="font-semibold">{b.kunci}</TableCell>
                       <TableCell className="tabular-nums"><b>{b.p}%</b> <span className="text-xs text-muted-foreground">({b.benar}/{b.peserta})</span></TableCell>
                       <TableCell><Badge variant={b.kategori === 'Mudah' ? 'hijau' : b.kategori === 'Sedang' ? 'kuning' : 'merah'}>{b.kategori}</Badge></TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {b.dayaBeda === null ? <span className="text-xs text-muted-foreground">Peserta &lt; 10</span> : (
+                          <><b className="tabular-nums">{b.dayaBeda.toFixed(2).replace('.', ',')}</b> <Badge variant={VARIAN_DAYA_BEDA[b.kategoriDayaBeda!]}>{b.kategoriDayaBeda}</Badge></>
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
                         {['A', 'B', 'C', 'D'].map((h, i) => (
                           <span key={h}>{i > 0 && ' / '}<span className={b.kunci.includes(h) ? 'font-semibold text-hijau' : ''}>{b.sebaran[h]}</span></span>

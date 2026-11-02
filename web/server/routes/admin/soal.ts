@@ -9,7 +9,8 @@ import { butuhStaf } from '../../lib/sesi.ts';
 import { teks } from '../../lib/util.ts';
 
 export const rutAdminSoal = Router();
-rutAdminSoal.use(butuhStaf());
+// Bank soal dikelola terpusat oleh admin instansi.
+rutAdminSoal.use(butuhStaf('ADMIN'));
 
 rutAdminSoal.get('/', async (_req, res) => {
   res.json(await prisma.soal.findMany({ orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }, { id: 'asc' }] }));

@@ -2,7 +2,7 @@ import { ArrowClockwise, Camera, Monitor as IkonLayar } from '@phosphor-icons/re
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { KepalaHalaman } from '@/components/admin';
+import { KepalaHalaman, PilihSekolah, SEMUA_SEKOLAH, paramSekolah, useStaf } from '@/components/admin';
 import { GaleriLayar, urlLayar } from '@/components/GaleriLayar';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
@@ -16,7 +16,7 @@ import { LABEL_PELANGGARAN, type Pelanggaran, type TangkapanLayar } from '@/lib/
 import { cn } from '@/lib/utils';
 
 type Sesi = {
-  id: string; nama: string; kelas: string; username: string; namaUjian: string; jumlahSoal: number; terjawab: number; ragu: number;
+  id: string; nama: string; kelas: string; username: string; namaSekolah: string; namaUjian: string; jumlahSoal: number; terjawab: number; ragu: number;
   mulai: string; sisaDetik: number | null; terakhirAktif: string; jumlahPelanggaran: number; maksPelanggaran: number;
   pelanggaranTerakhir: Pelanggaran | null;
   tangkapanTerakhir: TangkapanLayar | null;
@@ -29,9 +29,12 @@ export default function Monitor() {
   const [konfirmasi, dialog] = useKonfirmasi();
   const [lihat, setLihat] = useState<Sesi | null>(null);
   const [lihatLayar, setLihatLayar] = useState<Sesi | null>(null);
+  const staf = useStaf();
+  const admin = staf.peran === 'ADMIN';
+  const [sekolah, setSekolah] = useState(SEMUA_SEKOLAH);
   const q = useQuery({
-    queryKey: ['monitor'],
-    queryFn: () => api.get<{ sekarang: string; sesi: Sesi[] }>('/admin/monitor'),
+    queryKey: ['monitor', sekolah],
+    queryFn: () => api.get<{ sekarang: string; sesi: Sesi[] }>(`/admin/monitor${paramSekolah(sekolah)}`),
     refetchInterval: 10_000,
   });
   const aksi = useMutation({
@@ -43,9 +46,10 @@ export default function Monitor() {
 
   return (
     <>
-      <KepalaHalaman judul="Monitor ujian" keterangan="Diperbarui otomatis setiap 10 detik.">
+      <KepalaHalaman judul="Monitor ujian" keterangan={`${admin ? '' : `${staf.namaSekolah} · `}Diperbarui otomatis setiap 10 detik.`}>
         <Button variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}><ArrowClockwise /> Perbarui</Button>
       </KepalaHalaman>
+      {admin && <div className="mb-4 max-w-sm"><PilihSekolah nilai={sekolah} ubah={setSekolah} semua label="Saring sekolah" /></div>}
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !q.data.sesi.length ? (
         <Kosong judul="Tidak ada siswa yang sedang mengerjakan ujian.">Siswa akan muncul di sini begitu menekan "Mulai ujian".</Kosong>
       ) : (
@@ -58,7 +62,7 @@ export default function Monitor() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{s.nama}</p>
-                    <p className="truncate text-sm text-muted-foreground">Kelas {s.kelas} · {s.namaUjian}</p>
+                    <p className="truncate text-sm text-muted-foreground">{admin && sekolah === SEMUA_SEKOLAH && `${s.namaSekolah} · `}Kelas {s.kelas} · {s.namaUjian}</p>
                   </div>
                   <span className="text-xl font-semibold tabular-nums">{s.sisaDetik === null ? 'Bebas' : formatJam(s.sisaDetik)}</span>
                 </div>

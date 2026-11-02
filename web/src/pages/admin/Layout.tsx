@@ -1,5 +1,5 @@
 import {
-  Broadcast, CalendarCheck, ChartBar, ClipboardText, GearSix, House, Key, List, ListChecks, SignOut, Student, UsersThree, X,
+  Broadcast, Buildings, CalendarCheck, ChartBar, ClipboardText, GearSix, House, Key, List, ListChecks, SignOut, Student, UsersThree, X,
 } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -12,19 +12,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useProfilStaf } from '@/hooks/useProfil';
 import { api, ApiError, pesanGalat } from '@/lib/api';
-import type { ProfilStaf } from '@/lib/tipe';
+import { LABEL_PERAN, type Peran, type ProfilStaf } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
 
-const MENU = [
-  { ke: '/admin', label: 'Beranda', ikon: House, akhir: true },
-  { ke: '/admin/monitor', label: 'Monitor ujian', ikon: Broadcast },
-  { ke: '/admin/soal', label: 'Bank soal', ikon: ClipboardText },
-  { ke: '/admin/ujian', label: 'Jadwal ujian', ikon: CalendarCheck },
-  { ke: '/admin/hasil', label: 'Hasil & analisis', ikon: ChartBar },
-  { ke: '/admin/siswa', label: 'Data siswa', ikon: Student, admin: true },
-  { ke: '/admin/pengguna', label: 'Guru & admin', ikon: UsersThree, admin: true },
-  { ke: '/admin/pengaturan', label: 'Pengaturan', ikon: GearSix, admin: true },
-  { ke: '/admin/log', label: 'Log aktivitas', ikon: ListChecks, admin: true },
+const SEMUA: Peran[] = ['ADMIN', 'OPERATOR', 'GURU'];
+const PENGAWAS: Peran[] = ['ADMIN', 'OPERATOR'];
+
+// Hak akses tiap menu sama dengan pembatasan di server (server/routes/admin).
+const MENU: { ke: string; label: string | Partial<Record<Peran, string>>; ikon: typeof House; peran: Peran[]; akhir?: boolean }[] = [
+  { ke: '/admin', label: 'Beranda', ikon: House, akhir: true, peran: SEMUA },
+  { ke: '/admin/monitor', label: 'Monitor ujian', ikon: Broadcast, peran: PENGAWAS },
+  { ke: '/admin/hasil', label: 'Hasil & analisis', ikon: ChartBar, peran: SEMUA },
+  { ke: '/admin/ujian', label: { ADMIN: 'Jadwal ujian', OPERATOR: 'Jadwal & token' }, ikon: CalendarCheck, peran: PENGAWAS },
+  { ke: '/admin/soal', label: 'Bank soal', ikon: ClipboardText, peran: ['ADMIN'] },
+  { ke: '/admin/sekolah', label: 'Sekolah', ikon: Buildings, peran: ['ADMIN'] },
+  { ke: '/admin/siswa', label: 'Data siswa', ikon: Student, peran: PENGAWAS },
+  { ke: '/admin/pengguna', label: { ADMIN: 'Pengguna', OPERATOR: 'Akun guru' }, ikon: UsersThree, peran: PENGAWAS },
+  { ke: '/admin/pengaturan', label: 'Pengaturan', ikon: GearSix, peran: ['ADMIN'] },
+  { ke: '/admin/log', label: 'Log aktivitas', ikon: ListChecks, peran: PENGAWAS },
 ];
 
 export function LayoutAdmin() {
@@ -49,8 +54,8 @@ function LoginStaf() {
       <BilahKepala />
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-12">
       <form className="rounded-xl border border-garis bg-white p-6 sm:p-8" onSubmit={(e) => { e.preventDefault(); masuk.mutate(); }}>
-        <h1 className="text-xl">Masuk guru dan admin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Pengelolaan soal, jadwal ujian, pengawasan, dan hasil.</p>
+        <h1 className="text-xl">Masuk petugas</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Untuk admin Suku Dinas, operator sekolah, dan guru.</p>
         <div className="mt-6 space-y-1.5"><Label htmlFor="u">Username</Label><Input id="u" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required /></div>
         <div className="mt-4 space-y-1.5"><Label htmlFor="p">Kata sandi</Label><Input id="p" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
         {masuk.error && <p role="alert" className="mt-4 rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-sm text-merah">{pesanGalat(masuk.error)}</p>}
@@ -74,7 +79,8 @@ function Kerangka({ profil }: { profil: ProfilStaf }) {
       qc.setQueryData(['profil', 'staf'], null);
     },
   });
-  const menu = MENU.filter((m) => !m.admin || profil.peran === 'ADMIN');
+  const menu = MENU.filter((m) => m.peran.includes(profil.peran))
+    .map((m) => ({ ...m, label: typeof m.label === 'string' ? m.label : (m.label[profil.peran] ?? '') }));
   const bolehHalaman = menu.some((m) => (m.akhir ? lokasi.pathname === m.ke : lokasi.pathname.startsWith(m.ke)));
 
   const nav = (
@@ -107,7 +113,8 @@ function Kerangka({ profil }: { profil: ProfilStaf }) {
         <div className="p-3">{nav}</div>
         <div className="mt-auto border-t border-border p-3">
           <p className="px-3 font-semibold">{profil.nama}</p>
-          <p className="px-3 text-xs text-muted-foreground">{profil.peran === 'ADMIN' ? 'Admin' : 'Guru'} · {profil.username}</p>
+          <p className="px-3 text-xs text-muted-foreground">{LABEL_PERAN[profil.peran]} · {profil.username}</p>
+          {profil.namaSekolah && <p className="px-3 text-xs font-semibold text-biru">{profil.namaSekolah}</p>}
           <Button variant="ghost" size="sm" className="mt-2 w-full justify-start" onClick={() => setGantiSandi(true)}><Key /> Ganti kata sandi</Button>
           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => keluar.mutate()}><SignOut /> Keluar</Button>
         </div>
@@ -120,7 +127,7 @@ function Kerangka({ profil }: { profil: ProfilStaf }) {
           <Merek kecil terang />
         </div>
         <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
-          {bolehHalaman ? <Outlet context={profil} /> : <Galat galat={new Error('Halaman ini hanya untuk admin.')} />}
+          {bolehHalaman ? <Outlet context={profil} /> : <Galat galat={new Error('Anda tidak punya akses ke halaman ini.')} />}
         </main>
       </div>
       <GantiSandi jenis="staf" buka={gantiSandi} setBuka={setGantiSandi} />

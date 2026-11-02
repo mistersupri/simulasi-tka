@@ -2,17 +2,45 @@ import { Printer, DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useInfo } from '@/hooks/useProfil';
+import { api } from '@/lib/api';
 import { parseTabel, tabelKeObjek, unduhCsv, type KolomImpor } from '@/lib/tabel';
-import type { Akun, ProfilStaf } from '@/lib/tipe';
+import type { Akun, ProfilStaf, SekolahPilihan } from '@/lib/tipe';
 
 export const useStaf = () => useOutletContext<ProfilStaf>();
+
+/** Daftar sekolah untuk filter & form. Operator/guru hanya menerima sekolahnya sendiri. */
+export const useDaftarSekolah = () =>
+  useQuery({ queryKey: ['sekolah', 'pilihan'], queryFn: () => api.get<SekolahPilihan[]>('/admin/sekolah/pilihan'), staleTime: 60_000 });
+
+export const SEMUA_SEKOLAH = 'semua';
+
+/** Pilihan sekolah. Dengan `semua`, ada opsi "Semua sekolah" bernilai SEMUA_SEKOLAH. */
+export function PilihSekolah({ nilai, ubah, semua, id, label = 'Sekolah' }: {
+  nilai: string; ubah: (v: string) => void; semua?: boolean; id?: string; label?: string;
+}) {
+  const q = useDaftarSekolah();
+  return (
+    <Select value={nilai} onValueChange={ubah}>
+      <SelectTrigger id={id} aria-label={label}><SelectValue placeholder={q.isPending ? 'Memuat sekolah...' : 'Pilih sekolah'} /></SelectTrigger>
+      <SelectContent>
+        {semua && <SelectItem value={SEMUA_SEKOLAH}>Semua sekolah</SelectItem>}
+        {q.data?.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}{s.aktif ? '' : ' (nonaktif)'}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Parameter ?sekolahId= untuk API; kosong bila "semua". */
+export const paramSekolah = (nilai: string, awal = '?') => (nilai && nilai !== SEMUA_SEKOLAH ? `${awal}sekolahId=${encodeURIComponent(nilai)}` : '');
 
 export function KepalaHalaman({ judul, keterangan, children }: { judul: string; keterangan?: ReactNode; children?: ReactNode }) {
   return (
@@ -94,7 +122,7 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
           </Table>
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => unduhCsv('akun.csv', [['Nama', 'Kelas', 'Username', 'Kata sandi'], ...(akun ?? []).map((a) => [a.nama, a.kelas, a.username, a.password])])}>
+          <Button variant="outline" onClick={() => unduhCsv('akun.csv', [['Sekolah', 'Nama', 'Kelas', 'Username', 'Kata sandi'], ...(akun ?? []).map((a) => [a.sekolah ?? '', a.nama, a.kelas, a.username, a.password])])}>
             <DownloadSimple /> Unduh CSV
           </Button>
           <Button onClick={cetak}><Printer /> Cetak kartu login</Button>
@@ -106,7 +134,7 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
             {akun.map((a) => (
               <div key={a.username} className="break-inside-avoid rounded-lg border border-dashed border-garis p-3 text-sm">
                 <p className="font-semibold">Kartu login Simulasi TKA</p>
-                <p className="text-xs">{info?.namaSekolah}</p>
+                <p className="text-xs">{a.sekolah || info?.namaSekolah}</p>
                 <table className="mt-2"><tbody>
                   <tr><td className="pr-3">Nama</td><td className="font-semibold">{a.nama}</td></tr>
                   <tr><td className="pr-3">Kelas</td><td>{a.kelas}</td></tr>
@@ -125,8 +153,8 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
 }
 
 /** Impor dari tempelan Excel/Sheets atau berkas CSV, dengan pratinjau. */
-export function DialogImpor({ buka, setBuka, judul, petunjuk, kolom, template, kirim }: {
-  buka: boolean; setBuka: (b: boolean) => void; judul: string; petunjuk: ReactNode; kolom: KolomImpor[];
+export function DialogImpor({ buka, setBuka, judul, petunjuk, atas, kolom, template, kirim }: {
+  buka: boolean; setBuka: (b: boolean) => void; judul: string; petunjuk: ReactNode; atas?: ReactNode; kolom: KolomImpor[];
   template: string[][]; kirim: (baris: Record<string, string | number>[], progres: (n: number) => void) => Promise<void>;
 }) {
   const [teks, setTeks] = useState('');
@@ -150,6 +178,7 @@ export function DialogImpor({ buka, setBuka, judul, petunjuk, kolom, template, k
           <DialogDescription>{petunjuk}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-3">
+          {atas}
           <p className="text-sm">Urutan kolom: <b>{kolom.map((k) => k.header[0]).join(' · ')}</b>. Baris judul kolom boleh ikut ditempel.</p>
           <div className="flex flex-wrap gap-2">
             <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
