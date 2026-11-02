@@ -32,15 +32,16 @@ jadi siswa tidak bisa membuka situs lain. Halaman guru/admin tetap dibuka lewat 
 Installer harus dibuat ulang setiap kali alamat server berubah.
 
 ### Cara 1: rilis otomatis dengan GitHub Actions
-Workflow `.github/workflows/rilis-desktop.yml` membangun **Windows (.exe)** dan **Linux (.AppImage, .deb)**
+Workflow `.github/workflows/rilis.yml` menjalankan tes server, lalu membangun **paket server + image Docker**,
+**Windows (.exe)**, dan **Linux (.AppImage, .deb)**
 lalu membuat **GitHub Release** berisi ketiga berkas beserta `SHA256SUMS.txt`.
 
 1. Sekali saja, di **Settings > Secrets and variables > Actions**:
-   - tab *Variables*: `TKA_SERVER_URL`, misalnya `http://192.168.1.10:3000`;
+   - `TKA_SERVER_URL` (sebagai Variable atau Secret), misalnya `http://192.168.1.10:3000`;
    - tab *Secrets* (opsional): `TKA_KUNCI_APLIKASI` (sama dengan `KUNCI_APLIKASI` server) dan `TKA_SANDI_DARURAT`.
 2. Jalankan salah satu:
-   - dorong tag: `git tag desktop-v1.0.1 && git push origin desktop-v1.0.1`;
-   - atau **Actions > Rilis aplikasi desktop > Run workflow**, isi versi (dan alamat server bila berbeda).
+   - dorong tag: `git tag v1.0.1 && git push origin v1.0.1`;
+   - atau **Actions > Rilis > Run workflow**, isi versi (dan alamat server bila berbeda).
 3. Setelah sekitar 10 menit, buka halaman **Releases**.
 
 > **Rilis dibuat sebagai draft**, hanya terlihat oleh pemilik dan kolaborator repositori. Repositori ini

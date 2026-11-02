@@ -11,7 +11,8 @@ file ekspor disimpan di **Google Drive**. Tidak perlu server atau hosting berbay
 >   Data versi Google Spreadsheet bisa dipindahkan lewat menu Pengaturan.
 > - **Aplikasi ujian desktop Windows & Linux** (folder [`desktop/`](desktop/README.md)): Electron, mode kiosk untuk komputer lab,
 >   memblokir tangkapan layar, dan alamat server tertanam di installer. Dipakai bersama versi server.
->   Rilis otomatis lewat GitHub Actions (`.github/workflows/rilis-desktop.yml`).
+>   Rilis otomatis lewat GitHub Actions (`.github/workflows/rilis.yml`): paket server, image Docker,
+>   aplikasi Windows dan Linux dalam satu GitHub Release. Dorong tag `v1.2.3` untuk merilis.
 
 ## Fitur
 

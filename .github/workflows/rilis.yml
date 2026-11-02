@@ -1,0 +1,320 @@
+# Rilis lengkap Simulasi TKA dalam satu GitHub Release:
+#   - server siap jalan: paket Node.js (linux x64) + image Docker di GitHub Container Registry
+#   - aplikasi ujian desktop: Windows (.exe), Linux (.AppImage, .deb)
+# Tes server dijalankan dulu; rilis tidak dibuat bila tes gagal.
+#
+# Cara menjalankan:
+#   1. Dorong tag:   git tag v1.0.1 && git push origin v1.0.1
+#   2. Atau manual:  tab Actions > "Rilis" > Run workflow (hanya dari branch utama)
+#
+# Pengaturan repositori (Settings > Secrets and variables > Actions):
+#   TKA_SERVER_URL      alamat server ujian yang ditanam ke aplikasi desktop (Variable ATAU Secret)
+#   TKA_KUNCI_APLIKASI  Secret, sama dengan KUNCI_APLIKASI di server (opsional)
+#   TKA_SANDI_DARURAT   Secret, kata sandi pengawas bila server mati (opsional)
+#
+# PENTING: rilis dibuat sebagai DRAFT (hanya terlihat oleh pemilik & kolaborator), karena
+# installer desktop berisi alamat server dan kunci aplikasi yang bisa diekstrak.
+# Image Docker server tidak berisi rahasia apa pun (semua diatur lewat variabel lingkungan).
+name: Rilis
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      versi:
+        description: 'Nomor versi, mis. 1.0.1'
+        required: true
+      server_url:
+        description: 'Alamat server ujian untuk aplikasi desktop (kosong = pakai TKA_SERVER_URL)'
+        required: false
+      publik:
+        description: 'Terbitkan untuk umum (bukan draft)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rilis-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Alamat server: masukan manual, lalu Variable, lalu Secret repositori.
+  ALAMAT_SERVER: ${{ inputs.server_url || vars.TKA_SERVER_URL || secrets.TKA_SERVER_URL }}
+
+jobs:
+  siapkan:
+    name: Siapkan versi
+    runs-on: ubuntu-latest
+    outputs:
+      versi: ${{ steps.versi.outputs.versi }}
+      tag: ${{ steps.versi.outputs.tag }}
+      image: ${{ steps.versi.outputs.image }}
+    steps:
+      - id: versi
+        name: Tentukan versi & periksa pengaturan
+        env:
+          VERSI_INPUT: ${{ inputs.versi }}
+          PEMILIK: ${{ github.repository_owner }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSI="${GITHUB_REF_NAME#v}"
+          else
+            VERSI="${VERSI_INPUT#v}"
+          fi
+          if ! echo "$VERSI" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Versi \"$VERSI\" tidak valid. Gunakan format 1.2.3"
+            exit 1
+          fi
+          if [ -z "$ALAMAT_SERVER" ]; then
+            echo "::error::Alamat server kosong. Isi saat Run workflow atau buat Variable/Secret repositori TKA_SERVER_URL."
+            exit 1
+          fi
+          {
+            echo "versi=$VERSI"
+            echo "tag=v$VERSI"
+            echo "image=ghcr.io/$(echo "$PEMILIK" | tr '[:upper:]' '[:lower:]')/simulasi-tka-server"
+          } >> "$GITHUB_OUTPUT"
+
+  uji:
+    name: Tes server
+    needs: siapkan
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: simulasi_tka_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: web
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/simulasi_tka_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/simulasi_tka_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Periksa tipe
+        run: npx tsc -p tsconfig.server.json && npx tsc -p tsconfig.app.json
+      - name: Tes API
+        run: npm test
+
+  server:
+    name: Paket server (linux x64)
+    needs: [siapkan, uji]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Pasang dependensi
+        # postinstall menjalankan prisma generate, yang hanya butuh format URL, bukan database.
+        run: DATABASE_URL=postgresql://build@localhost/build npm ci
+      - run: npm version "${{ needs.siapkan.outputs.versi }}" --no-git-tag-version --allow-same-version
+      - name: Build antarmuka
+        run: npm run build
+      - name: Buang dependensi pengembangan
+        run: npm prune --omit=dev
+      - name: Kemas
+        run: |
+          NAMA="simulasi-tka-server-${{ needs.siapkan.outputs.versi }}-linux-x64"
+          mkdir -p "../$NAMA"
+          cp -r dist server prisma public scripts node_modules package.json package-lock.json prisma.config.ts \
+            .env.example README.md DESIGN.md Dockerfile docker-compose.yml "../$NAMA/"
+          rm -rf "../$NAMA/public/mediapipe/wasm" # sudah ada di dist/client
+          tar -C .. -czf "../$NAMA.tar.gz" "$NAMA"
+          ls -la "../$NAMA.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rilis-server
+          path: simulasi-tka-server-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    name: Image Docker server
+    needs: [siapkan, uji]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          tags: |
+            ${{ needs.siapkan.outputs.image }}:${{ needs.siapkan.outputs.versi }}
+            ${{ needs.siapkan.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.siapkan.outputs.versi }}
+            org.opencontainers.image.description=Server Simulasi TKA
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Berkas docker-compose untuk rilis
+        run: |
+          mkdir -p rilis-docker
+          sed -e "s#^    build: \.\$#    image: ${{ needs.siapkan.outputs.image }}:${{ needs.siapkan.outputs.versi }}#" \
+            -e "s#docker compose up -d --build#docker compose up -d#" \
+            web/docker-compose.yml > rilis-docker/docker-compose.yml
+          grep -q "image: ${{ needs.siapkan.outputs.image }}" rilis-docker/docker-compose.yml
+          cp web/.env.example rilis-docker/env.example
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rilis-docker
+          path: rilis-docker/*
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop:
+    name: Aplikasi ${{ matrix.nama }}
+    needs: [siapkan, uji]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nama: Windows
+            os: windows-latest
+            skrip: build:win
+            berkas: |
+              desktop/dist/*.exe
+          - nama: Linux
+            os: ubuntu-latest
+            skrip: build:linux
+            berkas: |
+              desktop/dist/*.AppImage
+              desktop/dist/*.deb
+    defaults:
+      run:
+        working-directory: desktop
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Pasang dependensi
+        run: npm ci
+      - name: Setel versi aplikasi
+        run: npm version "${{ needs.siapkan.outputs.versi }}" --no-git-tag-version --allow-same-version
+      - name: Build installer
+        run: npm run ${{ matrix.skrip }}
+        env:
+          TKA_SERVER_URL: ${{ env.ALAMAT_SERVER }}
+          TKA_KUNCI_APLIKASI: ${{ secrets.TKA_KUNCI_APLIKASI }}
+          TKA_SANDI_DARURAT: ${{ secrets.TKA_SANDI_DARURAT }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rilis-desktop-${{ matrix.nama }}
+          path: ${{ matrix.berkas }}
+          if-no-files-found: error
+          retention-days: 7
+
+  rilis:
+    name: Terbitkan rilis
+    needs: [siapkan, server, docker, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: berkas
+          pattern: rilis-*
+          merge-multiple: true
+
+      - name: Hitung checksum
+        working-directory: berkas
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Buat atau perbarui rilis
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.siapkan.outputs.tag }}
+          VERSI: ${{ needs.siapkan.outputs.versi }}
+          IMAGE: ${{ needs.siapkan.outputs.image }}
+          PUBLIK: ${{ inputs.publik == true }}
+        run: |
+          cat > catatan.md <<CATATAN
+          ## Server
+
+          **Docker (disarankan).** Unduh \`docker-compose.yml\` dan \`env.example\` dari rilis ini ke satu folder, lalu:
+          \`\`\`bash
+          cp env.example .env        # isi DB_PASSWORD, ADMIN_PASSWORD, KUNCI_APLIKASI, COOKIE_SECURE
+          docker compose up -d
+          docker compose exec app npm run db:seed    # akun admin pertama
+          \`\`\`
+          Image: \`${IMAGE}:${VERSI}\`
+
+          **Tanpa Docker** (Ubuntu 22.04+/Debian 12+, Node.js 22, PostgreSQL 16):
+          \`\`\`bash
+          tar xzf simulasi-tka-server-${VERSI}-linux-x64.tar.gz && cd simulasi-tka-server-${VERSI}-linux-x64
+          cp .env.example .env        # isi DATABASE_URL dan lainnya
+          npx prisma migrate deploy && npm run db:seed
+          NODE_ENV=production npm start
+          \`\`\`
+
+          ## Aplikasi ujian desktop
+
+          | Berkas | Untuk |
+          |---|---|
+          | \`Ujian-TKA-Setup-${VERSI}.exe\` | Windows 10/11 64-bit (installer) |
+          | \`Ujian-TKA-${VERSI}-x86_64.AppImage\` | Linux 64-bit, tanpa instalasi (\`chmod +x\` lalu jalankan) |
+          | \`Ujian-TKA-${VERSI}-amd64.deb\` | Ubuntu/Debian: \`sudo apt install ./Ujian-TKA-${VERSI}-amd64.deb\` |
+
+          Alamat server sudah tertanam di aplikasi desktop. Panduan lengkap: \`web/README.md\` dan \`desktop/README.md\`.
+          Periksa keaslian berkas dengan \`SHA256SUMS.txt\`.
+          CATATAN
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Rilis $TAG sudah ada: berkas diperbarui."
+            gh release upload "$TAG" berkas/* --clobber
+          else
+            DRAFT="--draft"
+            [ "$PUBLIK" = "true" ] && DRAFT=""
+            gh release create "$TAG" berkas/* $DRAFT \
+              --title "Simulasi TKA ${VERSI}" \
+              --notes-file catatan.md \
+              --target "$GITHUB_SHA"
+          fi
+
+          {
+            echo "### Rilis ${TAG}"
+            [ "$PUBLIK" = "true" ] && echo "Diterbitkan untuk umum." || echo "Dibuat sebagai **draft**: buka halaman Releases untuk mengunduh atau menerbitkannya."
+            echo
+            echo "Image server: \`${IMAGE}:${VERSI}\`"
+            echo
+            echo '```'
+            cat berkas/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
