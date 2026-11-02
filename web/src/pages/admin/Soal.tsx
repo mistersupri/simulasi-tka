@@ -1,6 +1,9 @@
-import { DownloadSimple, Eye, Image as IkonGambar, PencilSimple, Plus, Trash, UploadSimple } from '@phosphor-icons/react';
+import {
+  BookOpen, CaretRight, DownloadSimple, Eye, Image as IkonGambar, PencilSimple, Plus, Trash, UploadSimple,
+} from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import {
   BilahPilihan, DialogDitolak, DialogImpor, KepalaHalaman, paramSekolah, useDaftarSekolah, usePilihan, useStaf, type Ditolak,
@@ -25,7 +28,7 @@ import type { Soal } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
 
 const HURUF = ['A', 'B', 'C', 'D'];
-const SEMUA = 'semua';
+const urutKelas = (a: string, b: string) => a.localeCompare(b, 'id', { numeric: true });
 
 const KOLOM_IMPOR: KolomImpor[] = [
   { kunci: 'id', header: ['ID_SOAL', 'ID'] },
@@ -50,13 +53,23 @@ export default function HalamanSoal() {
   const admin = staf.peran === 'ADMIN';
   const daftarSekolah = useDaftarSekolah();
   // Admin mengelola bank instansi (bawaan) dan bisa membuka bank soal sekolah; operator selalu bank sekolahnya.
-  const [pemilik, setPemilik] = useState(INSTANSI);
+  const [pemilik, setPemilikState] = useState(INSTANSI);
   const sekolahId = admin && pemilik !== INSTANSI ? pemilik : null;
   const [konfirmasi, dialogKonfirmasi] = useKonfirmasi();
   const q = useQuery({ queryKey: ['soal', pemilik], queryFn: () => api.get<Soal[]>(`/admin/soal${paramSekolah(sekolahId ?? '')}`) });
   const [cari, setCari] = useState('');
-  const [mapel, setMapel] = useState(SEMUA);
-  const [kelas, setKelas] = useState(SEMUA);
+  // Alur: pilih kelas, lalu mata pelajaran, lalu daftar soal. Disimpan di URL agar tombol Kembali browser berfungsi.
+  const [param, setParam] = useSearchParams();
+  const kelas = param.get('kelas');
+  const mapel = kelas ? param.get('mapel') : null;
+  const buka = (k: string | null, m: string | null = null) => {
+    const baru = new URLSearchParams();
+    if (k) baru.set('kelas', k);
+    if (k && m) baru.set('mapel', m);
+    setParam(baru);
+    setCari('');
+  };
+  const setPemilik = (v: string) => { setPemilikState(v); buka(null); };
   const [form, setForm] = useState<Soal | 'baru' | null>(null);
   const [pratinjau, setPratinjau] = useState<Soal | null>(null);
   const [impor, setImpor] = useState(false);
@@ -64,12 +77,18 @@ export default function HalamanSoal() {
 
   const semua = q.data ?? [];
   const daftarMapel = useMemo(() => [...new Set(semua.map((s) => s.mataPelajaran))].sort(), [semua]);
-  const daftarKelas = useMemo(() => [...new Set(semua.map((s) => s.kelas))].sort((a, b) => a.localeCompare(b, 'id', { numeric: true })), [semua]);
+  const ringkasKelas = useMemo(() => kelompokkan(semua, (s) => s.kelas).sort((a, b) => urutKelas(a.kunci, b.kunci)), [semua]);
+  const ringkasMapel = useMemo(
+    () => kelompokkan(semua.filter((s) => s.kelas === kelas), (s) => s.mataPelajaran).sort((a, b) => a.kunci.localeCompare(b.kunci, 'id')),
+    [semua, kelas],
+  );
+  // Daftar soal tampil di tingkat mapel, atau di tingkat mana pun saat mencari.
+  const tampilSoal = !!mapel || !!cari;
   const data = useMemo(() => semua.filter((s) =>
-    (mapel === SEMUA || s.mataPelajaran === mapel) && (kelas === SEMUA || s.kelas === kelas) &&
+    (!kelas || s.kelas === kelas) && (!mapel || s.mataPelajaran === mapel) &&
     (!cari || `${s.id} ${s.pertanyaan} ${s.opsi.join(' ')}`.toLowerCase().includes(cari.toLowerCase())),
   ), [semua, mapel, kelas, cari]);
-  const pilihan = usePilihan(useMemo(() => data.map((s) => s.id), [data]));
+  const pilihan = usePilihan(useMemo(() => (tampilSoal ? data.map((s) => s.id) : []), [data, tampilSoal]));
 
   const massal = useMutation({
     mutationFn: (v: { aksi: 'hapus' | 'aktif' | 'nonaktif' }) => v.aksi === 'hapus'
@@ -109,17 +128,15 @@ export default function HalamanSoal() {
           </Select>
         </div>
       )}
-      <div className="mb-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
-        <Input type="search" placeholder="Cari ID atau isi soal..." aria-label="Cari soal" value={cari} onChange={(e) => setCari(e.target.value)} />
-        <Select value={mapel} onValueChange={setMapel}>
-          <SelectTrigger aria-label="Saring mata pelajaran"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value={SEMUA}>Semua mapel</SelectItem>{daftarMapel.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={kelas} onValueChange={setKelas}>
-          <SelectTrigger aria-label="Saring kelas"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value={SEMUA}>Semua kelas</SelectItem>{daftarKelas.map((k) => <SelectItem key={k} value={k}>Kelas {k}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+      <nav aria-label="Posisi di bank soal" className="mb-4 flex flex-wrap items-center gap-1 text-[15px]">
+        <TombolJejak aktif={!kelas} onClick={() => buka(null)}>Semua kelas</TombolJejak>
+        {kelas && <><CaretRight className="size-4 text-muted-foreground" /><TombolJejak aktif={!mapel} onClick={() => buka(kelas)}>Kelas {kelas}</TombolJejak></>}
+        {mapel && <><CaretRight className="size-4 text-muted-foreground" /><TombolJejak aktif>{mapel}</TombolJejak></>}
+      </nav>
+      <Input
+        type="search" className="mb-4 max-w-md" aria-label="Cari soal" value={cari} onChange={(e) => setCari(e.target.value)}
+        placeholder={mapel ? `Cari di ${mapel} kelas ${kelas}...` : kelas ? `Cari di semua soal kelas ${kelas}...` : 'Cari ID atau isi soal di semua kelas...'}
+      />
 
       <BilahPilihan jumlah={pilihan.dipilih.size}>
         <Button size="sm" variant="outline" onClick={() => massal.mutate({ aksi: 'aktif' })}>Aktifkan</Button>
@@ -129,10 +146,22 @@ export default function HalamanSoal() {
         }}><Trash /> Hapus</Button>
       </BilahPilihan>
 
-      {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !data.length ? (
-        <Kosong judul={semua.length ? 'Tidak ada soal yang cocok dengan saringan.' : 'Bank soal masih kosong.'}>
-          {!semua.length && 'Tambahkan soal satu per satu, atau impor dari Excel.'}
-        </Kosong>
+      {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !semua.length ? (
+        <Kosong judul="Bank soal masih kosong.">Tambahkan soal satu per satu, atau impor dari Excel.</Kosong>
+      ) : !tampilSoal && !kelas ? (
+        <DaftarKelompok
+          judul="Pilih kelas" kelompok={ringkasKelas} label={(k) => `Kelas ${k}`}
+          rincian={(g) => `${g.jumlahMapel} mata pelajaran`} pilih={(k) => buka(k)}
+        />
+      ) : !tampilSoal ? (
+        ringkasMapel.length ? (
+          <DaftarKelompok
+            judul={`Mata pelajaran kelas ${kelas}`} kelompok={ringkasMapel} label={(m) => m}
+            rincian={(g) => [g.pgk && `${g.pgk} PG kompleks`, g.bergambar && `${g.bergambar} bergambar`].filter(Boolean).join(' · ')} pilih={(m) => buka(kelas, m)}
+          />
+        ) : <Kosong judul={`Belum ada soal kelas ${kelas}.`}>Tambahkan soal atau kembali ke daftar kelas.</Kosong>
+      ) : !data.length ? (
+        <Kosong judul={cari ? 'Tidak ada soal yang cocok dengan pencarian.' : `Belum ada soal ${mapel} kelas ${kelas}.`} />
       ) : (
         <Table>
           <TableHeader>
@@ -145,7 +174,7 @@ export default function HalamanSoal() {
             {data.map((s) => (
               <TableRow key={s.id} data-state={pilihan.dipilih.has(s.id) ? 'selected' : undefined}>
                 <TableCell><Checkbox aria-label={`Pilih ${s.id}`} checked={pilihan.dipilih.has(s.id)} onCheckedChange={(v) => pilihan.ubah(s.id, !!v)} /></TableCell>
-                <TableCell><b>{s.id}</b><div className="text-xs text-muted-foreground">{s.mataPelajaran} · kls {s.kelas}</div></TableCell>
+                <TableCell><b>{s.id}</b>{!mapel && <div className="text-xs text-muted-foreground">{s.mataPelajaran} · kls {s.kelas}</div>}</TableCell>
                 <TableCell className="max-w-md">
                   <p className="line-clamp-2">{s.gambar && <IkonGambar className="mr-1 inline size-4" aria-label="Bergambar" />}{s.pertanyaan}</p>
                   {s.tipe === 'PGK' && <Badge variant="biru" className="mt-1">PG kompleks</Badge>}
@@ -165,7 +194,12 @@ export default function HalamanSoal() {
         </Table>
       )}
 
-      {form && <FormSoal soal={form === 'baru' ? null : form} sekolahId={sekolahId} daftarMapel={daftarMapel} tutup={() => setForm(null)} />}
+      {form && (
+        <FormSoal
+          soal={form === 'baru' ? null : form} sekolahId={sekolahId} daftarMapel={daftarMapel}
+          awalKelas={kelas} awalMapel={mapel} tutup={() => setForm(null)}
+        />
+      )}
       <DialogPratinjau soal={pratinjau} tutup={() => setPratinjau(null)} />
       <DialogImpor
         buka={impor} setBuka={setImpor} judul="Impor soal" kolom={KOLOM_IMPOR}
@@ -194,12 +228,14 @@ export default function HalamanSoal() {
   );
 }
 
-function FormSoal({ soal, sekolahId, daftarMapel, tutup }: { soal: Soal | null; sekolahId: string | null; daftarMapel: string[]; tutup: () => void }) {
+function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, tutup }: {
+  soal: Soal | null; sekolahId: string | null; daftarMapel: string[]; awalKelas: string | null; awalMapel: string | null; tutup: () => void;
+}) {
   const qc = useQueryClient();
   const [d, setD] = useState(() => ({
     id: soal?.id ?? '',
-    mataPelajaran: soal?.mataPelajaran ?? daftarMapel[0] ?? 'Matematika',
-    kelas: soal?.kelas ?? '6',
+    mataPelajaran: soal?.mataPelajaran ?? awalMapel ?? daftarMapel[0] ?? 'Matematika',
+    kelas: soal?.kelas ?? awalKelas ?? '6',
     tipe: soal?.tipe ?? ('PG' as 'PG' | 'PGK'),
     pertanyaan: soal?.pertanyaan ?? '',
     opsi: soal?.opsi ?? ['', '', '', ''],
@@ -336,5 +372,55 @@ function DialogPratinjau({ soal: s, tutup }: { soal: Soal | null; tutup: () => v
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+type Kelompok = { kunci: string; jumlah: number; aktif: number; pgk: number; bergambar: number; jumlahMapel: number };
+
+function kelompokkan(soal: Soal[], kunci: (s: Soal) => string): Kelompok[] {
+  const peta = new Map<string, Soal[]>();
+  for (const s of soal) peta.set(kunci(s), [...(peta.get(kunci(s)) ?? []), s]);
+  return [...peta.entries()].map(([k, isi]) => ({
+    kunci: k,
+    jumlah: isi.length,
+    aktif: isi.filter((s) => s.aktif).length,
+    pgk: isi.filter((s) => s.tipe === 'PGK').length,
+    bergambar: isi.filter((s) => s.gambar).length,
+    jumlahMapel: new Set(isi.map((s) => s.mataPelajaran)).size,
+  }));
+}
+
+function TombolJejak({ aktif, onClick, children }: { aktif: boolean; onClick?: () => void; children: React.ReactNode }) {
+  if (aktif) return <span aria-current="page" className="px-1 font-semibold">{children}</span>;
+  return <button type="button" onClick={onClick} className="rounded px-1 text-biru underline-offset-4 hover:underline">{children}</button>;
+}
+
+/** Kartu kelas atau mata pelajaran yang bisa diklik untuk masuk ke tingkat berikutnya. */
+function DaftarKelompok({ judul, kelompok, label, rincian, pilih }: {
+  judul: string; kelompok: Kelompok[]; label: (k: string) => string; rincian: (g: Kelompok) => string; pilih: (k: string) => void;
+}) {
+  return (
+    <section aria-label={judul}>
+      <h2 className="text-lg">{judul}</h2>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {kelompok.map((g) => (
+          <li key={g.kunci}>
+            <button
+              type="button" onClick={() => pilih(g.kunci)}
+              className="flex w-full items-center gap-4 rounded-lg border border-garis bg-white p-4 text-left transition-colors hover:border-biru hover:bg-biru-muda/40"
+            >
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-biru-muda text-biru"><BookOpen className="size-6" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-lg font-semibold">{label(g.kunci)}</span>
+                <span className="block text-sm text-muted-foreground">
+                  <b className="text-tinta tabular-nums">{g.jumlah}</b> soal{g.aktif < g.jumlah && ` (${g.jumlah - g.aktif} nonaktif)`}{rincian(g) && ` · ${rincian(g)}`}
+                </span>
+              </span>
+              <CaretRight className="size-5 shrink-0 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -4,6 +4,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { InputSandi } from '@/components/InputSandi';
 import { GantiSandi } from '@/components/GantiSandi';
 import { Galat, Memuat } from '@/components/Keadaan';
 import { BilahKepala, Merek } from '@/components/Merek';
@@ -57,7 +58,7 @@ function LoginStaf() {
         <h1 className="text-xl">Masuk petugas</h1>
         <p className="mt-1 text-sm text-muted-foreground">Untuk admin Suku Dinas, operator sekolah, dan guru.</p>
         <div className="mt-6 space-y-1.5"><Label htmlFor="u">Username</Label><Input id="u" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required /></div>
-        <div className="mt-4 space-y-1.5"><Label htmlFor="p">Kata sandi</Label><Input id="p" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+        <div className="mt-4 space-y-1.5"><Label htmlFor="p">Kata sandi</Label><InputSandi id="p" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
         {masuk.error && <p role="alert" className="mt-4 rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-sm text-merah">{pesanGalat(masuk.error)}</p>}
         <Button type="submit" size="lg" className="mt-6 w-full" disabled={masuk.isPending}>{masuk.isPending ? 'Memeriksa...' : 'Masuk'}</Button>
       </form>

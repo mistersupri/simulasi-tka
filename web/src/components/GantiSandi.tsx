@@ -1,9 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { InputSandi } from '@/components/InputSandi';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, pesanGalat } from '@/lib/api';
 
@@ -32,9 +32,9 @@ export function GantiSandi({ jenis, buka, setBuka }: { jenis: 'siswa' | 'staf'; 
         }}>
           <DialogHeader><DialogTitle>Ganti kata sandi</DialogTitle></DialogHeader>
           <DialogBody className="space-y-4">
-            <div className="space-y-1.5"><Label htmlFor="pw-lama">Kata sandi lama</Label><Input id="pw-lama" type="password" autoComplete="current-password" value={lama} onChange={(e) => setLama(e.target.value)} required /></div>
-            <div className="space-y-1.5"><Label htmlFor="pw-baru">Kata sandi baru</Label><Input id="pw-baru" type="password" autoComplete="new-password" minLength={6} value={baru} onChange={(e) => setBaru(e.target.value)} required /><p className="text-xs text-muted-foreground">Minimal 6 karakter.</p></div>
-            <div className="space-y-1.5"><Label htmlFor="pw-ulang">Ulangi kata sandi baru</Label><Input id="pw-ulang" type="password" autoComplete="new-password" value={ulang} onChange={(e) => setUlang(e.target.value)} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="pw-lama">Kata sandi lama</Label><InputSandi id="pw-lama" autoComplete="current-password" value={lama} onChange={(e) => setLama(e.target.value)} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="pw-baru">Kata sandi baru</Label><InputSandi id="pw-baru" autoComplete="new-password" minLength={6} value={baru} onChange={(e) => setBaru(e.target.value)} required /><p className="text-xs text-muted-foreground">Minimal 6 karakter.</p></div>
+            <div className="space-y-1.5"><Label htmlFor="pw-ulang">Ulangi kata sandi baru</Label><InputSandi id="pw-ulang" autoComplete="new-password" value={ulang} onChange={(e) => setUlang(e.target.value)} required /></div>
             {galat && <p role="alert" className="text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
           <DialogFooter>

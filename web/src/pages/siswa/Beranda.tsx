@@ -4,6 +4,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { InputSandi } from '@/components/InputSandi';
 import { GantiSandi } from '@/components/GantiSandi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { BilahKepala } from '@/components/Merek';
@@ -89,7 +90,7 @@ function LoginSiswa() {
             </div>
             <div className="mt-4 space-y-1.5">
               <Label htmlFor="password">Kata sandi</Label>
-              <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <InputSandi id="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             {masuk.error && <p role="alert" className="mt-4 rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-sm text-merah">{pesanGalat(masuk.error)}</p>}
             <Button type="submit" size="lg" className="mt-6 w-full" disabled={masuk.isPending}>
