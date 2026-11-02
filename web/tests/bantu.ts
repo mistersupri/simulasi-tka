@@ -12,7 +12,7 @@ export const EXCEL = path.resolve(import.meta.dirname, '../../database/Database_
 export const KUNCI: Record<string, string> = { MTK001: 'B', MTK002: 'C', MTK003: 'C' };
 
 export async function kosongkanDb() {
-  kosongkanGagalLogin();
+  await kosongkanGagalLogin();
   await prisma.$executeRawUnsafe(
     'TRUNCATE "Pelanggaran","TangkapanLayar","Hasil","SesiUjian","Ujian","Soal","SesiLogin","Siswa","Pengguna","Sekolah","Pengaturan","LogAktivitas" CASCADE',
   );

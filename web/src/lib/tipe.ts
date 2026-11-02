@@ -64,7 +64,8 @@ export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; token: string | null; acakSoal: boolean; acakOpsi: boolean;
   tampilkanNilai: boolean; tampilkanPembahasan: boolean; maksPercobaan: number; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; sekolah: string[]; soalPerKelas: Record<string, number>; jumlahPeserta: number;
+  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; sekolah: string[];
+  pemilikId: string | null; namaPemilik: string | null; bolehUbah: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
 };
 export type Siswa = {
   id: string; nisn: string; nama: string; kelas: string; username: string; aktif: boolean; loginTerakhir: string | null; sekolahId: string; namaSekolah: string;

@@ -19,13 +19,23 @@ export function kodeMapel(mapel: string): string {
   return (kata[0] ?? 'SOAL').slice(0, 3);
 }
 
-/** ID berikutnya, mis. MTK004 bila sudah ada MTK001 sampai MTK003. */
-export async function idSoalBerikutnya(mapel: string, sudahDipakai: Set<string> = new Set()) {
-  const kode = kodeMapel(mapel);
+/**
+ * Awalan ID soal sekolah, mis. "20100001-" (NPSN), agar ID tidak bentrok dengan bank soal
+ * instansi dan nomor urut instansi tidak terlihat oleh sekolah.
+ */
+export async function awalanSoalSekolah(sekolahId: string | null) {
+  if (!sekolahId) return '';
+  const s = await prisma.sekolah.findUnique({ where: { id: sekolahId }, select: { npsn: true, id: true } });
+  return `${s?.npsn ?? sekolahId.slice(-6).toUpperCase()}-`;
+}
+
+/** ID berikutnya, mis. MTK004 bila sudah ada MTK001 sampai MTK003 (dengan awalan sekolah bila ada). */
+export async function idSoalBerikutnya(mapel: string, sudahDipakai: Set<string> = new Set(), awalan = '') {
+  const kode = awalan + kodeMapel(mapel);
   const ada = await prisma.soal.findMany({ where: { id: { startsWith: kode } }, select: { id: true } });
   let maks = 0;
   for (const id of [...ada.map((s) => s.id), ...sudahDipakai]) {
-    const m = id.toUpperCase().match(new RegExp(`^${kode}(\\d+)$`));
+    const m = id.toUpperCase().match(new RegExp(`^${kode.replace(/[-]/g, '\\-')}(\\d+)$`));
     if (m) maks = Math.max(maks, Number(m[1]));
   }
   return kode + String(maks + 1).padStart(3, '0');
@@ -37,7 +47,7 @@ export type MasukanSoal = {
 };
 
 /** Validasi & normalisasi data soal (form, impor tempel, impor Excel). */
-export function dataSoal(d: MasukanSoal): Omit<Prisma.SoalCreateInput, 'id'> {
+export function dataSoal(d: MasukanSoal): Omit<Prisma.SoalUncheckedCreateInput, 'id' | 'sekolahId'> {
   const tipe = teks(d.tipe).toUpperCase() === 'PGK' ? 'PGK' : 'PG';
   const opsi = (d.opsi ?? []).slice(0, 4).map(teks);
   const kunci = normalisasiKunci(d.kunci, tipe);

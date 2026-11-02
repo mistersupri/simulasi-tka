@@ -86,8 +86,14 @@ export function usePilihan(semuaId: string[]) {
 }
 
 /** Akun baru/reset: kata sandi hanya terlihat sekali, jadi tawarkan cetak & unduh. */
-export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | null; judul: string; tutup: () => void; ditolak?: Ditolak[] }) {
+/** petugas: akun guru/operator/admin, sehingga kartu menampilkan "Peran" dan alamat halaman petugas. */
+export function DialogAkun({ akun, judul, tutup, ditolak, petugas }: {
+  akun: Akun[] | null; judul: string; tutup: () => void; ditolak?: Ditolak[]; petugas?: boolean;
+}) {
   const { data: info } = useInfo();
+  const labelKelas = petugas ? 'Peran' : 'Kelas';
+  const alamat = window.location.origin + (petugas ? '/admin' : '');
+  const adaSekolah = !!akun?.some((a) => a.sekolah);
   const cetak = () => {
     document.body.classList.add('mode-cetak');
     window.print();
@@ -110,10 +116,15 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
             </div>
           )}
           <Table>
-            <TableHeader><TableRow><TableHead>Nama</TableHead><TableHead>Kelas</TableHead><TableHead>Username</TableHead><TableHead>Kata sandi</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                {adaSekolah && <TableHead>Sekolah</TableHead>}<TableHead>Nama</TableHead><TableHead>{labelKelas}</TableHead><TableHead>Username</TableHead><TableHead>Kata sandi</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {akun?.map((a) => (
                 <TableRow key={a.username}>
+                  {adaSekolah && <TableCell className="text-sm">{a.sekolah}</TableCell>}
                   <TableCell className="font-semibold">{a.nama}</TableCell><TableCell>{a.kelas}</TableCell>
                   <TableCell><code>{a.username}</code></TableCell><TableCell><code className="text-base font-semibold">{a.password}</code></TableCell>
                 </TableRow>
@@ -122,7 +133,7 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
           </Table>
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => unduhCsv('akun.csv', [['Sekolah', 'Nama', 'Kelas', 'Username', 'Kata sandi'], ...(akun ?? []).map((a) => [a.sekolah ?? '', a.nama, a.kelas, a.username, a.password])])}>
+          <Button variant="outline" onClick={() => unduhCsv('akun.csv', [['Sekolah', 'Nama', labelKelas, 'Username', 'Kata sandi', 'Alamat'], ...(akun ?? []).map((a) => [a.sekolah ?? '', a.nama, a.kelas, a.username, a.password, alamat])])}>
             <DownloadSimple /> Unduh CSV
           </Button>
           <Button onClick={cetak}><Printer /> Cetak kartu login</Button>
@@ -137,11 +148,11 @@ export function DialogAkun({ akun, judul, tutup, ditolak }: { akun: Akun[] | nul
                 <p className="text-xs">{a.sekolah || info?.namaSekolah}</p>
                 <table className="mt-2"><tbody>
                   <tr><td className="pr-3">Nama</td><td className="font-semibold">{a.nama}</td></tr>
-                  <tr><td className="pr-3">Kelas</td><td>{a.kelas}</td></tr>
+                  <tr><td className="pr-3">{labelKelas}</td><td>{a.kelas}</td></tr>
                   <tr><td className="pr-3">Username</td><td className="text-base font-semibold">{a.username}</td></tr>
                   <tr><td className="pr-3">Kata sandi</td><td className="text-base font-semibold">{a.password}</td></tr>
                 </tbody></table>
-                <p className="mt-2 text-xs break-all">{window.location.origin}</p>
+                <p className="mt-2 text-xs break-all">{alamat}</p>
               </div>
             ))}
           </div>

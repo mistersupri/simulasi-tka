@@ -15,20 +15,21 @@ const MAKS_PER_PROSES = 50;
 const usernameSah = z.string().trim().toLowerCase()
   .regex(/^[a-z0-9._-]{3,30}$/, 'Username harus 3 sampai 30 huruf kecil, angka, titik, garis bawah, atau strip.');
 
-export async function usernameDipakai(username: string) {
-  const [s, p] = await Promise.all([
-    prisma.siswa.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, select: { id: true } }),
-    prisma.pengguna.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, select: { id: true } }),
-  ]);
-  return !!(s || p);
+/** Username siswa cukup unik di dalam satu sekolah. */
+export async function usernameSiswaDipakai(username: string, sekolahId: string, kecualiId?: string) {
+  const ada = await prisma.siswa.findFirst({
+    where: { sekolahId, username: { equals: username, mode: 'insensitive' }, ...(kecualiId ? { id: { not: kecualiId } } : {}) },
+    select: { id: true },
+  });
+  return !!ada;
 }
 
-/** "Budi Santoso" → "budi" + 3 angka acak yang belum dipakai. */
-async function usernameOtomatis(nama: string, terpakai: Set<string>) {
+/** "Budi Santoso" → "budi" + 3 angka acak yang belum dipakai di sekolah itu. */
+async function usernameOtomatis(nama: string, terpakai: Set<string>, sekolahId: string) {
   const dasar = (teks(nama).toLowerCase().split(/\s+/)[0] ?? '').replace(/[^a-z0-9]/g, '').slice(0, 12) || 'siswa';
   for (let i = 0; i < 200; i++) {
     const calon = dasar + String(100 + Math.floor(Math.random() * 900));
-    if (!terpakai.has(calon) && !(await usernameDipakai(calon))) return calon;
+    if (!terpakai.has(calon) && !(await usernameSiswaDipakai(calon, sekolahId))) return calon;
   }
   throw galat(500, `Gagal membuat username untuk ${nama}.`);
 }
@@ -79,9 +80,9 @@ const skemaSiswa = z.object({
 
 rutAdminSiswa.post('/', async (req, res) => {
   const d = skemaSiswa.parse(req.body);
-  const username = d.username ? usernameSah.parse(d.username) : await usernameOtomatis(d.nama, new Set());
-  if (await usernameDipakai(username)) throw galat(400, `Username ${username} sudah dipakai.`);
   const sekolahId = await sekolahTujuan(req.staf!, d.sekolahId);
+  const username = d.username ? usernameSah.parse(d.username) : await usernameOtomatis(d.nama, new Set(), sekolahId);
+  if (await usernameSiswaDipakai(username, sekolahId)) throw galat(400, `Username ${username} sudah dipakai di sekolah ini.`);
   const password = d.password || buatPasswordAcak();
   await prisma.siswa.create({
     data: { nisn: d.nisn, nama: d.nama, kelas: d.kelas, username, sekolahId, aktif: d.aktif, passwordHash: await hashPassword(password) },
@@ -97,6 +98,9 @@ rutAdminSiswa.put('/:id', async (req, res) => {
   pastikanSekolah(req.staf!, lama.sekolahId, 'Siswa tidak ditemukan.');
   // Admin boleh memindahkan siswa ke sekolah lain; operator tidak.
   const sekolahId = req.staf!.peran === 'ADMIN' && d.sekolahId ? await sekolahTujuan(req.staf!, d.sekolahId) : lama.sekolahId;
+  if (sekolahId !== lama.sekolahId && (await usernameSiswaDipakai(lama.username, sekolahId, lama.id))) {
+    throw galat(400, `Username ${lama.username} sudah dipakai di sekolah tujuan. Ganti dulu username salah satunya.`);
+  }
   await prisma.siswa.update({
     where: { id: lama.id },
     data: {
@@ -163,8 +167,8 @@ rutAdminSiswa.post('/impor', async (req, res) => {
       const kelas = normalisasiKelas(b.kelas);
       if (!nama || !kelas) throw galat(400, 'Nama dan kelas wajib diisi.');
       const usernameMentah = teks(b.username);
-      const username = usernameMentah ? usernameSah.parse(usernameMentah) : await usernameOtomatis(nama, terpakai);
-      if (terpakai.has(username) || (await usernameDipakai(username))) throw galat(400, `Username ${username} sudah dipakai.`);
+      const username = usernameMentah ? usernameSah.parse(usernameMentah) : await usernameOtomatis(nama, terpakai, sekolahId);
+      if (terpakai.has(username) || (await usernameSiswaDipakai(username, sekolahId))) throw galat(400, `Username ${username} sudah dipakai di sekolah ini.`);
       const password = teks(b.password) || buatPasswordAcak();
       await prisma.siswa.create({ data: { nisn: teks(b.nisn), nama, kelas, username, sekolahId, passwordHash: await hashPassword(password) } });
       terpakai.add(username);

@@ -22,7 +22,6 @@ import { buatTokenUjian, daftarKelas, normalisasiKunci } from '../../lib/util.ts
  */
 export const rutAdminUjian = Router();
 rutAdminUjian.use(butuhStaf());
-const hanyaAdmin = butuhStaf('ADMIN');
 const pengawas = butuhStaf('ADMIN', 'OPERATOR');
 
 /** Ujian yang berlaku untuk sekolah tertentu (daftar sekolah kosong = semua sekolah). */
@@ -36,21 +35,26 @@ const ujianUntukSekolah = (sekolahId: string | null) =>
 rutAdminUjian.get('/ujian', pengawas, async (req, res) => {
   const sekolahId = sekolahStaf(req.staf!);
   const [ujian, soal, peserta] = await Promise.all([
-    prisma.ujian.findMany({ where: ujianUntukSekolah(sekolahId), orderBy: { dibuat: 'desc' } }),
-    prisma.soal.findMany({ where: { aktif: true }, select: { mataPelajaran: true, kelas: true } }),
+    prisma.ujian.findMany({ where: ujianUntukSekolah(sekolahId), include: { pemilik: { select: { nama: true } } }, orderBy: { dibuat: 'desc' } }),
+    // Operator hanya melihat soal sekolahnya; jumlah soal ujian instansi tidak ditampilkan ke sekolah.
+    prisma.soal.findMany({ where: { aktif: true, ...(sekolahId ? { sekolahId } : {}) }, select: { mataPelajaran: true, kelas: true, sekolahId: true } }),
     prisma.hasil.groupBy({ by: ['ujianId'], where: sekolahId ? { sekolahId } : {}, _count: true }),
   ]);
   const jumlahPeserta = new Map(peserta.map((p) => [p.ujianId, p._count]));
   res.json({
     // Fitur "wajib aplikasi" hanya bisa dipakai bila server punya KUNCI_APLIKASI.
     aplikasiTersedia: !!config.kunciAplikasi,
-    daftarMapel: [...new Set(soal.map((s) => s.mataPelajaran))].sort(),
-    ujian: ujian.map((u) => {
-      const cocok = soal.filter((s) => s.mataPelajaran.toLowerCase() === u.mataPelajaran.toLowerCase());
+    // Mapel untuk form: admin dari bank instansi, operator dari bank sekolahnya.
+    daftarMapel: [...new Set(soal.filter((s) => s.sekolahId === sekolahId).map((s) => s.mataPelajaran))].sort(),
+    ujian: ujian.map(({ pemilik, ...u }) => {
+      const bolehUbah = !sekolahId || u.pemilikId === sekolahId;
+      const cocok = soal.filter((s) => s.sekolahId === u.pemilikId && s.mataPelajaran.toLowerCase() === u.mataPelajaran.toLowerCase());
       const kelas = u.kelas.length ? u.kelas : [...new Set(cocok.map((s) => s.kelas))].sort();
       return {
         ...u,
-        soalPerKelas: Object.fromEntries(kelas.map((k) => [k, cocok.filter((s) => s.kelas === k).length])),
+        namaPemilik: pemilik?.nama ?? null,
+        bolehUbah,
+        soalPerKelas: bolehUbah ? Object.fromEntries(kelas.map((k) => [k, cocok.filter((s) => s.kelas === k).length])) : {},
         jumlahPeserta: jumlahPeserta.get(u.id) ?? 0,
       };
     }),
@@ -92,25 +96,40 @@ async function pastikanSekolahAda(ids: string[]) {
   if (ada !== ids.length) throw galat(400, 'Ada sekolah peserta yang tidak ditemukan.');
 }
 
-rutAdminUjian.post('/ujian', hanyaAdmin, async (req, res) => {
+/**
+ * Ujian yang boleh diubah: admin semua; operator hanya ujian internal sekolahnya.
+ * Ujian instansi tidak bisa diubah sekolah (token & jadwal berlaku untuk banyak sekolah).
+ */
+async function ujianTerjangkau(staf: Staf, id: string) {
+  const u = await prisma.ujian.findUnique({ where: { id } });
+  const milik = sekolahStaf(staf);
+  if (!u || (milik && u.pemilikId !== milik)) throw galat(404, 'Ujian tidak ditemukan atau bukan milik sekolah Anda.');
+  return u;
+}
+
+rutAdminUjian.post('/ujian', pengawas, async (req, res) => {
   const d = skemaUjian.parse(req.body);
-  await pastikanSekolahAda(d.sekolah);
-  const u = await prisma.ujian.create({ data: d });
+  const milik = sekolahStaf(req.staf!);
+  // Ujian sekolah selalu hanya untuk sekolah itu dan memakai bank soal sekolah itu.
+  const data = milik ? { ...d, sekolah: [milik], pemilikId: milik } : d;
+  await pastikanSekolahAda(data.sekolah);
+  const u = await prisma.ujian.create({ data });
   await catatLog(req.staf!, 'TAMBAH_UJIAN', u.nama);
   res.json({ pesan: 'Ujian ditambahkan.', id: u.id });
 });
 
-rutAdminUjian.put('/ujian/:id', hanyaAdmin, async (req, res) => {
+rutAdminUjian.put('/ujian/:id', pengawas, async (req, res) => {
   const d = skemaUjian.parse(req.body);
-  await pastikanSekolahAda(d.sekolah);
-  const u = await prisma.ujian.update({ where: { id: String(req.params.id) }, data: d }).catch(() => null);
-  if (!u) throw galat(404, 'Ujian tidak ditemukan.');
+  const lama = await ujianTerjangkau(req.staf!, String(req.params.id));
+  const data = lama.pemilikId ? { ...d, sekolah: [lama.pemilikId] } : d;
+  await pastikanSekolahAda(data.sekolah);
+  const u = await prisma.ujian.update({ where: { id: lama.id }, data });
   await catatLog(req.staf!, 'UBAH_UJIAN', u.nama);
   res.json({ pesan: 'Ujian diperbarui.', id: u.id });
 });
 
-rutAdminUjian.delete('/ujian/:id', hanyaAdmin, async (req, res) => {
-  const id = String(req.params.id);
+rutAdminUjian.delete('/ujian/:id', pengawas, async (req, res) => {
+  const id = (await ujianTerjangkau(req.staf!, String(req.params.id))).id;
   const berjalan = await prisma.sesiUjian.count({ where: { ujianId: id, status: 'BERLANGSUNG' } });
   if (berjalan) throw galat(400, `Masih ada ${berjalan} siswa yang sedang mengerjakan ujian ini.`);
   const u = await prisma.ujian.delete({ where: { id } }).catch(() => null);
@@ -119,10 +138,10 @@ rutAdminUjian.delete('/ujian/:id', hanyaAdmin, async (req, res) => {
   res.json({ pesan: 'Ujian dihapus. Hasil ujian tetap tersimpan.' });
 });
 
-rutAdminUjian.post('/ujian/:id/token', hanyaAdmin, async (req, res) => {
+rutAdminUjian.post('/ujian/:id/token', pengawas, async (req, res) => {
   const token = buatTokenUjian();
-  const u = await prisma.ujian.update({ where: { id: String(req.params.id) }, data: { token } }).catch(() => null);
-  if (!u) throw galat(404, 'Ujian tidak ditemukan.');
+  const lama = await ujianTerjangkau(req.staf!, String(req.params.id));
+  const u = await prisma.ujian.update({ where: { id: lama.id }, data: { token } });
   await catatLog(req.staf!, 'TOKEN_UJIAN', u.nama);
   res.json({ token });
 });

@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { prisma } from '../../db.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
+import { hashPassword } from '../../lib/password.ts';
 import { butuhStaf } from '../../lib/sesi.ts';
+import { buatPasswordAcak, teks } from '../../lib/util.ts';
+import { usernameStafDipakai } from './pengguna.ts';
 
 /** Daftar sekolah binaan instansi. Hanya admin instansi yang boleh mengubah. */
 export const rutAdminSekolah = Router();
@@ -93,4 +96,81 @@ rutAdminSekolah.delete('/:id', async (req, res) => {
   }
   await catatLog(req.staf!, 'HAPUS_SEKOLAH', s.nama);
   res.json({ pesan: 'Sekolah dihapus. Hasil ujian lamanya tetap tersimpan.' });
+});
+
+/** "op" + NPSN, atau "op" + inisial nama sekolah + angka acak. */
+async function usernameOperator(npsn: string | null, namaSekolah: string, terpakai: Set<string>) {
+  const calonTetap = npsn ? `op${npsn}` : null;
+  if (calonTetap && !terpakai.has(calonTetap) && !(await usernameStafDipakai(calonTetap))) return calonTetap;
+  const inisial = namaSekolah.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean).map((k) => (/^\d+$/.test(k) ? k : k[0])).join('').slice(0, 14) || 'sekolah';
+  for (let i = 0; i < 200; i++) {
+    const calon = `op${inisial}${100 + Math.floor(Math.random() * 900)}`;
+    if (!terpakai.has(calon) && !(await usernameStafDipakai(calon))) return calon;
+  }
+  throw galat(500, `Gagal membuat username operator untuk ${namaSekolah}.`);
+}
+
+/**
+ * Impor massal sekolah (dicocokkan lewat NPSN, atau nama bila NPSN kosong) beserta akun operatornya.
+ * Operator dibuat bila kolom operator diisi, atau bila operatorOtomatis aktif dan sekolah belum punya operator.
+ */
+rutAdminSekolah.post('/impor', async (req, res) => {
+  const { baris, operatorOtomatis } = z.object({
+    operatorOtomatis: z.boolean().default(true),
+    baris: z.array(z.object({
+      nomor: z.number(), npsn: z.string().default(''), nama: z.string().default(''), alamat: z.string().default(''),
+      namaOperator: z.string().default(''), usernameOperator: z.string().default(''), passwordOperator: z.string().default(''),
+    })).max(100, 'Maksimal 100 baris per proses.'),
+  }).parse(req.body);
+
+  const akun = [];
+  const ditolak = [];
+  const terpakai = new Set<string>();
+  let dibuat = 0;
+  let diperbarui = 0;
+  for (const b of baris) {
+    try {
+      const npsn = teks(b.npsn).replace(/\s/g, '') || null;
+      const nama = teks(b.nama);
+      if (npsn && !/^\d{8}$/.test(npsn)) throw galat(400, 'NPSN harus 8 angka.');
+      let sekolah = npsn
+        ? await prisma.sekolah.findUnique({ where: { npsn } })
+        : nama ? await prisma.sekolah.findFirst({ where: { nama: { equals: nama, mode: 'insensitive' } } }) : null;
+      if (sekolah) {
+        const data = { ...(nama ? { nama } : {}), ...(teks(b.alamat) ? { alamat: teks(b.alamat) } : {}) };
+        if (Object.keys(data).length) sekolah = await prisma.sekolah.update({ where: { id: sekolah.id }, data });
+        diperbarui++;
+      } else {
+        if (!nama) throw galat(400, 'Nama sekolah wajib diisi.');
+        sekolah = await prisma.sekolah.create({ data: { nama, npsn, alamat: teks(b.alamat) } });
+        dibuat++;
+      }
+
+      const isiOperator = teks(b.namaOperator) || teks(b.usernameOperator);
+      const belumAdaOperator = !(await prisma.pengguna.count({ where: { sekolahId: sekolah.id, peran: 'OPERATOR' } }));
+      if (!isiOperator && !(operatorOtomatis && belumAdaOperator)) continue;
+
+      let username = teks(b.usernameOperator).toLowerCase();
+      if (username) {
+        if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw galat(400, `Sekolah tersimpan, tetapi username operator ${username} tidak sah.`);
+        if (terpakai.has(username) || (await usernameStafDipakai(username))) throw galat(400, `Sekolah tersimpan, tetapi username ${username} sudah dipakai.`);
+      } else {
+        username = await usernameOperator(sekolah.npsn, sekolah.nama, terpakai);
+      }
+      const password = teks(b.passwordOperator) || buatPasswordAcak();
+      const namaOperator = teks(b.namaOperator) || `Operator ${sekolah.nama}`;
+      await prisma.pengguna.create({
+        data: { nama: namaOperator, username, peran: 'OPERATOR', sekolahId: sekolah.id, passwordHash: await hashPassword(password) },
+      });
+      terpakai.add(username);
+      akun.push({ nama: namaOperator, kelas: 'Operator sekolah', username, password, sekolah: sekolah.nama });
+    } catch (err) {
+      const pesan = err instanceof z.ZodError ? err.issues[0]?.message : (err as Error).message;
+      ditolak.push({ nomor: b.nomor, nama: b.nama, alasan: pesan ?? 'Gagal.' });
+    }
+  }
+  if (dibuat || diperbarui || akun.length) {
+    await catatLog(req.staf!, 'IMPOR_SEKOLAH', `${dibuat} baru, ${diperbarui} diperbarui, ${akun.length} operator`);
+  }
+  res.json({ dibuat, diperbarui, akun, ditolak });
 });

@@ -12,6 +12,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProfilSiswa } from '@/hooks/useProfil';
 import { layarPenuhDidukung, masukLayarPenuh } from '@/hooks/usePengawasan';
 import { rekamLayarDidukung } from '@/hooks/useRekamLayar';
@@ -33,13 +34,30 @@ export function HalamanBeranda() {
 // Login
 // ------------------------------------------------------------------
 
+// Sekolah terakhir diingat per perangkat: komputer lab biasanya dipakai siswa dari sekolah yang sama.
+const KUNCI_SEKOLAH = 'tka_sekolah';
+const bacaSekolahTersimpan = () => {
+  try { return localStorage.getItem(KUNCI_SEKOLAH) ?? ''; } catch { return ''; }
+};
+
 function LoginSiswa() {
   const qc = useQueryClient();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [sekolahId, setSekolahId] = useState(bacaSekolahTersimpan);
+  const sekolah = useQuery({ queryKey: ['sekolah-login'], queryFn: () => api.get<{ id: string; nama: string }[]>('/sekolah'), staleTime: 5 * 60_000 });
+  // Pilihan sekolah hanya tampil bila ada lebih dari satu sekolah.
+  const perluSekolah = (sekolah.data?.length ?? 0) > 1;
+  const sekolahSah = sekolah.data?.some((s) => s.id === sekolahId) ? sekolahId : '';
   const masuk = useMutation({
-    mutationFn: () => api.post<{ profil: ProfilSiswa }>('/auth/siswa/login', { username, password }),
-    onSuccess: (r) => qc.setQueryData(['profil', 'siswa'], r.profil),
+    mutationFn: () => {
+      if (perluSekolah && !sekolahSah) throw new Error('Pilih sekolah Anda terlebih dahulu.');
+      return api.post<{ profil: ProfilSiswa }>('/auth/siswa/login', { username, password, sekolahId: perluSekolah ? sekolahSah : null });
+    },
+    onSuccess: (r) => {
+      try { if (sekolahSah) localStorage.setItem(KUNCI_SEKOLAH, sekolahSah); } catch { /* penyimpanan diblokir: abaikan */ }
+      qc.setQueryData(['profil', 'siswa'], r.profil);
+    },
   });
 
   return (
@@ -55,8 +73,17 @@ function LoginSiswa() {
             }}
           >
             <h1 className="text-xl">Masuk peserta ujian</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Gunakan username dan kata sandi yang tercantum pada kartu login.</p>
-            <div className="mt-6 space-y-1.5">
+            <p className="mt-1 text-sm text-muted-foreground">Gunakan {perluSekolah ? 'sekolah, username, dan kata sandi' : 'username dan kata sandi'} yang tercantum pada kartu login.</p>
+            {perluSekolah && (
+              <div className="mt-6 space-y-1.5">
+                <Label htmlFor="sekolah">Sekolah</Label>
+                <Select value={sekolahSah} onValueChange={setSekolahId}>
+                  <SelectTrigger id="sekolah" aria-label="Sekolah"><SelectValue placeholder="Pilih sekolah" /></SelectTrigger>
+                  <SelectContent>{sekolah.data?.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className={perluSekolah ? 'mt-4 space-y-1.5' : 'mt-6 space-y-1.5'}>
               <Label htmlFor="username">Username</Label>
               <Input id="username" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
@@ -68,14 +95,14 @@ function LoginSiswa() {
             <Button type="submit" size="lg" className="mt-6 w-full" disabled={masuk.isPending}>
               {masuk.isPending ? 'Memeriksa akun...' : 'Masuk'}
             </Button>
-            <p className="mt-4 text-center text-sm text-muted-foreground">Lupa kata sandi? Hubungi guru atau admin sekolah.</p>
+            <p className="mt-4 text-center text-sm text-muted-foreground">Lupa kata sandi? Hubungi operator sekolah.</p>
           </form>
           {aplikasi ? (
             // Aplikasi ujian dipakai siswa di lab: tidak ada tautan ke ruang guru.
             <Button variant="ghost" className="mt-4 w-full" onClick={() => aplikasi?.keluar()}><Power /> Tutup aplikasi</Button>
           ) : (
             <p className="mt-6 text-center text-sm">
-              <Link to="/admin" className="text-biru underline-offset-4 hover:underline">Masuk sebagai guru atau admin</Link>
+              <Link to="/admin" className="text-biru underline-offset-4 hover:underline">Masuk sebagai petugas (operator, guru, admin)</Link>
             </p>
           )}
         </div>

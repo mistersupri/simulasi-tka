@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { prisma } from '../db.ts';
 import { kirimBerkas } from '../lib/berkas.ts';
 import { galat } from '../lib/galat.ts';
 import { ambilPengaturan } from '../lib/pengaturan.ts';
@@ -9,6 +10,11 @@ export const rutPublik = Router();
 rutPublik.get('/info', async (_req, res) => {
   const p = await ambilPengaturan();
   res.json({ namaSekolah: p.NAMA_SEKOLAH, tahunAjaran: p.TAHUN_AJARAN, pengumuman: p.PENGUMUMAN, adaLogo: !!p.LOGO });
+});
+
+/** Daftar sekolah aktif untuk form login siswa (hanya nama). */
+rutPublik.get('/sekolah', async (_req, res) => {
+  res.json(await prisma.sekolah.findMany({ where: { aktif: true }, orderBy: { nama: 'asc' }, select: { id: true, nama: true } }));
 });
 
 rutPublik.get('/logo', async (_req, res) => {

@@ -34,7 +34,7 @@ function statusJadwal(u: Ujian) {
 export default function HalamanUjian() {
   const qc = useQueryClient();
   const staf = useStaf();
-  // Operator sekolah hanya melihat jadwal & token untuk dibagikan saat ujian; jadwal diatur instansi.
+  // Operator melihat ujian bersama dari instansi (hanya baca) dan mengelola ujian internal sekolahnya.
   const admin = staf.peran === 'ADMIN';
   const sekolahQ = useDaftarSekolah();
   const namaSekolah = useMemo(() => new Map((sekolahQ.data ?? []).map((s) => [s.id, s.nama])), [sekolahQ.data]);
@@ -58,12 +58,12 @@ export default function HalamanUjian() {
   return (
     <>
       <KepalaHalaman
-        judul={admin ? 'Jadwal ujian' : 'Jadwal & token'}
+        judul="Jadwal ujian"
         keterangan={admin
           ? 'Atur sekolah peserta, kapan ujian dibuka, tokennya, dan cara pengawasannya.'
-          : 'Jadwal ujian untuk sekolah Anda dari Suku Dinas. Bacakan token kepada siswa saat ujian dimulai.'}
+          : 'Ujian bersama dari Suku Dinas (bacakan tokennya saat ujian dimulai) dan ujian internal sekolah Anda.'}
       >
-        {admin && <Button onClick={() => setForm('baru')}><Plus /> Buat ujian</Button>}
+        <Button onClick={() => setForm('baru')}><Plus /> {admin ? 'Buat ujian' : 'Buat ujian sekolah'}</Button>
       </KepalaHalaman>
       {q.isPending ? <Memuat /> : q.error ? <Galat galat={q.error} ulangi={() => q.refetch()} /> : !q.data.ujian.length ? (
         <Kosong judul="Belum ada ujian.">{admin ? 'Buat ujian pertama, lalu bagikan tokennya saat hari ujian.' : 'Belum ada ujian yang dijadwalkan untuk sekolah Anda.'}</Kosong>
@@ -76,7 +76,12 @@ export default function HalamanUjian() {
               <li key={u.id} className="flex flex-col rounded-lg border border-garis bg-white p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Badge variant={s.varian}>{s.label}</Badge>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant={s.varian}>{s.label}</Badge>
+                      {u.pemilikId
+                        ? <Badge variant="biru">{admin ? `Ujian internal ${u.namaPemilik}` : 'Ujian sekolah'}</Badge>
+                        : !admin && <Badge>Dari Suku Dinas</Badge>}
+                    </div>
                     <h2 className="mt-2 text-xl">{u.nama}</h2>
                     <p className="text-sm text-muted-foreground">{u.mataPelajaran} · {u.kelas.length ? `Kelas ${u.kelas.join(', ')}` : 'Semua kelas'}</p>
                   </div>
@@ -90,7 +95,7 @@ export default function HalamanUjian() {
                     <>
                       <dt className="text-muted-foreground">Sekolah</dt>
                       <dd className="font-semibold">
-                        {u.sekolah.length ? (u.sekolah.length > 2 ? `${u.sekolah.length} sekolah` : u.sekolah.map((id) => namaSekolah.get(id) ?? '?').join(', ')) : 'Semua sekolah'}
+                        {u.pemilikId ? u.namaPemilik : u.sekolah.length ? (u.sekolah.length > 2 ? `${u.sekolah.length} sekolah` : u.sekolah.map((id) => namaSekolah.get(id) ?? '?').join(', ')) : 'Semua sekolah'}
                       </dd>
                     </>
                   )}
@@ -107,16 +112,16 @@ export default function HalamanUjian() {
                   {u.intervalRekamLayar > 0 && <Badge><Monitor /> Rekam layar tiap {labelInterval(u.intervalRekamLayar)}</Badge>}
                   {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
-                {admin && kekurangan.length > 0 && (
+                {u.bolehUbah && kekurangan.length > 0 && (
                   <p className="mt-3 rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">
                     Soal kurang: {kekurangan.map(([k, n]) => `kelas ${k} hanya ${n}`).join(', ')}.
                   </p>
                 )}
                 <div className="mt-4 flex flex-1 flex-wrap items-end gap-2">
-                  {admin && <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple /> Ubah</Button>}
+                  {u.bolehUbah && <Button size="sm" variant="outline" onClick={() => setForm(u)}><PencilSimple /> Ubah</Button>}
                   <Button size="sm" variant="outline" onClick={() => setAnalisis(u.id)}><ChartBar /> Analisis</Button>
-                  {admin && <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise /> Token baru</Button>}
-                  {admin && (
+                  {u.bolehUbah && <Button size="sm" variant="outline" onClick={() => token.mutate(u.id)}><ArrowsClockwise /> Token baru</Button>}
+                  {u.bolehUbah && (
                     <Button size="sm" variant="ghost" className="ml-auto text-merah" aria-label={`Hapus ${u.nama}`} onClick={async () => {
                       if (await konfirmasi({ judul: `Hapus "${u.nama}"?`, pesan: 'Jadwal dihapus. Hasil ujian yang sudah masuk tetap tersimpan.', ya: 'Hapus', bahaya: true })) hapus.mutate(u.id);
                     }}><Trash /></Button>
@@ -127,7 +132,7 @@ export default function HalamanUjian() {
           })}
         </ul>
       )}
-      {form && <FormUjian ujian={form === 'baru' ? null : form} daftarMapel={q.data?.daftarMapel ?? []} aplikasiTersedia={!!q.data?.aplikasiTersedia} tutup={() => setForm(null)} />}
+      {form && <FormUjian admin={admin} ujian={form === 'baru' ? null : form} daftarMapel={q.data?.daftarMapel ?? []} aplikasiTersedia={!!q.data?.aplikasiTersedia} tutup={() => setForm(null)} />}
       <DialogAnalisis ujianId={analisis} tutup={() => setAnalisis(null)} />
       {dialog}
     </>
@@ -143,7 +148,11 @@ function Saklar({ id, label, ket, checked, ubah, disabled }: { id: string; label
   );
 }
 
-function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Ujian | null; daftarMapel: string[]; aplikasiTersedia: boolean; tutup: () => void }) {
+function FormUjian({ admin, ujian, daftarMapel, aplikasiTersedia, tutup }: {
+  admin: boolean; ujian: Ujian | null; daftarMapel: string[]; aplikasiTersedia: boolean; tutup: () => void;
+}) {
+  // Ujian internal sekolah selalu hanya untuk sekolah pemiliknya; tidak ada pilihan sekolah peserta.
+  const ujianSekolah = !admin || !!ujian?.pemilikId;
   const qc = useQueryClient();
   const [galat, setGalat] = useState('');
   const [d, setD] = useState({
@@ -186,7 +195,7 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!d.semuaSekolah && !d.sekolah.length) { setGalat('Pilih minimal satu sekolah peserta, atau nyalakan "Semua sekolah".'); return; }
+            if (!ujianSekolah && !d.semuaSekolah && !d.sekolah.length) { setGalat('Pilih minimal satu sekolah peserta, atau nyalakan "Semua sekolah".'); return; }
             setGalat('');
             simpan.mutate();
           }}
@@ -204,7 +213,14 @@ function FormUjian({ ujian, daftarMapel, aplikasiTersedia, tutup }: { ujian: Uji
               <div className="space-y-1.5"><Label htmlFor="u-kelas">Kelas</Label><Input id="u-kelas" value={d.kelas} onChange={(e) => ubah('kelas', e.target.value)} /><p className="text-xs text-muted-foreground">Contoh: 6 atau 5, 6. Kosongkan untuk semua kelas.</p></div>
             </section>
 
-            <PilihSekolahPeserta semua={d.semuaSekolah} ubahSemua={(v) => ubah('semuaSekolah', v)} nilai={d.sekolah} ubah={(v) => ubah('sekolah', v)} />
+            {ujianSekolah ? (
+              <p className="rounded-md bg-biru-muda px-3 py-2 text-sm">
+                Ujian internal {ujian?.namaPemilik ?? 'sekolah Anda'}: hanya untuk siswa sekolah ini dan memakai <b>bank soal sekolah</b>
+                (mata pelajaran dan kelas harus sama dengan soal di bank soal sekolah).
+              </p>
+            ) : (
+              <PilihSekolahPeserta semua={d.semuaSekolah} ubahSemua={(v) => ubah('semuaSekolah', v)} nilai={d.sekolah} ubah={(v) => ubah('sekolah', v)} />
+            )}
 
             <section>
               <h3 className="text-base">Waktu & soal</h3>

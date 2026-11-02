@@ -70,7 +70,7 @@ export default function HalamanPengguna() {
         </Table>
       )}
       {form && <FormPengguna saya={saya} pengguna={form === 'baru' ? null : form} tutup={() => setForm(null)} akunBaru={setAkun} />}
-      <DialogAkun akun={akun} judul="Akun pengguna baru" tutup={() => setAkun(null)} />
+      <DialogAkun petugas akun={akun} judul="Akun pengguna baru" tutup={() => setAkun(null)} />
       {dialog}
     </>
   );

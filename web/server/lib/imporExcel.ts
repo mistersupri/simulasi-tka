@@ -72,7 +72,10 @@ export async function imporExcel(buffer: ArrayBuffer | Buffer, sekolahId: string
     if (!sekolahSiswa) { lewati('DATA_SISWA', b, 'Sekolah belum dipilih (isi kolom NPSN atau pilih sekolah saat impor).'); continue; }
     if (!username || !b.NAMA_SISWA) { lewati('DATA_SISWA', b, 'Username atau nama kosong.'); continue; }
     if (!b.PASSWORD_HASH || !b.PASSWORD_SALT) { lewati('DATA_SISWA', b, 'Kata sandi belum di-hash; atur ulang lewat menu Data Siswa.'); continue; }
-    if (await prisma.siswa.findUnique({ where: { username } })) { lewati('DATA_SISWA', b, `Username ${username} sudah ada.`); continue; }
+    if (await prisma.siswa.findFirst({ where: { sekolahId: sekolahSiswa, username: { equals: username, mode: 'insensitive' } } })) {
+      lewati('DATA_SISWA', b, `Username ${username} sudah ada di sekolah itu.`);
+      continue;
+    }
     await prisma.siswa.create({
       data: {
         nisn: teks(b.NISN), nama: b.NAMA_SISWA, kelas: normalisasiKelas(b.KELAS), username, sekolahId: sekolahSiswa,

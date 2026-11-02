@@ -37,9 +37,13 @@ function pastikanAplikasi(req: Request, ujian: Ujian) {
   if (ujian.wajibAplikasi && !dariAplikasi(req)) throw galat(403, PESAN_WAJIB_APLIKASI);
 }
 
-const soalAktifUntuk = (mataPelajaran: string, kelas: string) =>
+/** Soal untuk ujian: ujian instansi memakai bank instansi, ujian sekolah memakai bank sekolah itu. */
+const soalAktifUntuk = (u: Pick<Ujian, 'mataPelajaran' | 'pemilikId'>, kelas: string) =>
   prisma.soal.findMany({
-    where: { aktif: true, kelas: normalisasiKelas(kelas), mataPelajaran: { equals: mataPelajaran, mode: 'insensitive' }, kunci: { not: '' } },
+    where: {
+      aktif: true, sekolahId: u.pemilikId, kelas: normalisasiKelas(kelas),
+      mataPelajaran: { equals: u.mataPelajaran, mode: 'insensitive' }, kunci: { not: '' },
+    },
     orderBy: { id: 'asc' },
   });
 
@@ -56,7 +60,7 @@ rutSiswa.get('/beranda', async (req, res) => {
 
   const ujian = [];
   for (const u of semuaUjian.filter((x) => ujianUntuk(x, siswa))) {
-    const tersedia = (await soalAktifUntuk(u.mataPelajaran, siswa.kelas)).length;
+    const tersedia = (await soalAktifUntuk(u, siswa.kelas)).length;
     const sesi = berjalan.find((s) => s.ujianId === u.id);
     if (!tersedia && !sesi) continue;
     const selesai = hasil.filter((h) => h.ujianId === u.id).length;
@@ -149,7 +153,7 @@ rutSiswa.post('/ujian/:ujianId/mulai', async (req, res) => {
     throw galat(400, 'Token ujian salah. Tanyakan token kepada pengawas.');
   }
 
-  let soal = await soalAktifUntuk(ujian.mataPelajaran, siswa.kelas);
+  let soal = await soalAktifUntuk(ujian, siswa.kelas);
   if (!soal.length) throw galat(400, 'Belum ada soal untuk ujian ini.');
   if (ujian.acakSoal) soal = acak(soal);
   if (ujian.jumlahSoal > 0) soal = soal.slice(0, ujian.jumlahSoal);

@@ -17,7 +17,7 @@ describe('impor Excel lama & login', () => {
 
   it('mengimpor siswa (hash lama), soal pecahan sebagai teks, dan ujian latihan', async () => {
     const { siswa } = await siapkan();
-    const s = await prisma.siswa.findUniqueOrThrow({ where: { username: 'uji_tka' } });
+    const s = await prisma.siswa.findFirstOrThrow({ where: { username: 'uji_tka' } });
     // Hash lama diganti scrypt setelah login pertama berhasil.
     expect(s.passwordHash.startsWith('scrypt$')).toBe(true);
     const mtk2 = await prisma.soal.findUniqueOrThrow({ where: { id: 'MTK002' } });
@@ -149,7 +149,7 @@ describe('admin', () => {
     expect(impor.akun).toHaveLength(2);
     expect(impor.ditolak.map((d: { nomor: number }) => d.nomor)).toEqual([4, 5]);
 
-    const ani = await prisma.siswa.findUniqueOrThrow({ where: { username: 'ani' } });
+    const ani = await prisma.siswa.findFirstOrThrow({ where: { username: 'ani' } });
     const reset = (await admin.post('/api/admin/siswa/reset-password').send({ ids: [ani.id] }).expect(200)).body;
     await request(app).post('/api/auth/siswa/login').send({ username: 'ani', password: 'aniani' }).expect(401);
     await request(app).post('/api/auth/siswa/login').send({ username: 'ani', password: reset.akun[0].password }).expect(200);
@@ -302,7 +302,7 @@ describe('manajemen sekolah', () => {
     // Operator membuat siswa; sekolah selalu sekolahnya sendiri walau mengirim sekolah lain.
     const siswaB = (await opB.post('/api/admin/siswa').send({ nama: 'Bambang', kelas: '6', username: 'bambang', password: 'bambang1', sekolahId: sekolahA }).expect(200)).body;
     expect(siswaB.akun[0].username).toBe('bambang');
-    expect((await prisma.siswa.findUniqueOrThrow({ where: { username: 'bambang' } })).sekolahId).toBe(sekolahB);
+    expect((await prisma.siswa.findFirstOrThrow({ where: { username: 'bambang' } })).sekolahId).toBe(sekolahB);
 
     // Operator hanya bisa membuat akun guru untuk sekolahnya.
     await opA.post('/api/admin/pengguna').send({ nama: 'X', username: 'opx', peran: 'OPERATOR', password: 'rahasia1' }).expect(403);
@@ -320,7 +320,7 @@ describe('manajemen sekolah', () => {
     expect(daftarA.map((s: { username: string }) => s.username)).toEqual(['uji_tka']);
     expect((await admin.get('/api/admin/siswa').expect(200)).body).toHaveLength(2);
 
-    const bambang = await prisma.siswa.findUniqueOrThrow({ where: { username: 'bambang' } });
+    const bambang = await prisma.siswa.findFirstOrThrow({ where: { username: 'bambang' } });
     await opA.put(`/api/admin/siswa/${bambang.id}`).send({ nama: 'Diubah', kelas: '6' }).expect(404);
     await opA.post('/api/admin/siswa/hapus').send({ ids: [bambang.id] }).expect(200);
     expect(await prisma.siswa.count({ where: { id: bambang.id } })).toBe(1);
@@ -332,9 +332,9 @@ describe('manajemen sekolah', () => {
     await opB.delete(`/api/admin/pengguna/${guruA.id}`).expect(404);
     expect((await opA.get('/api/admin/pengguna').expect(200)).body.map((p: { username: string }) => p.username)).toEqual(['gurua']);
 
-    // Operator tidak bisa mengubah bank soal, jadwal, sekolah, atau pengaturan.
-    await opA.get('/api/admin/soal').expect(403);
-    await opA.post('/api/admin/ujian').send({ nama: 'X', mataPelajaran: 'Matematika' }).expect(403);
+    // Operator tidak bisa melihat bank soal instansi, sekolah lain, atau pengaturan.
+    expect((await opA.get('/api/admin/soal').expect(200)).body).toHaveLength(0);
+    await opA.post('/api/admin/sekolah/impor').send({ baris: [] }).expect(403);
     await opA.get('/api/admin/sekolah').expect(403);
     await opA.put('/api/admin/pengaturan').send({}).expect(403);
     expect((await opA.get('/api/admin/sekolah/pilihan').expect(200)).body).toHaveLength(1);
@@ -390,6 +390,113 @@ describe('manajemen sekolah', () => {
     expect(await prisma.ujian.findUniqueOrThrow({ where: { id: u } })).toMatchObject({ sekolah: [], aktif: false });
     const daftar = (await admin.get('/api/admin/sekolah').expect(200)).body;
     expect(daftar.find((s: { nama: string }) => s.nama === 'SDN Uji B')).toMatchObject({ jumlahSiswa: 1, jumlahOperator: 1, aktif: false });
+  });
+});
+
+describe('soal & ujian sekolah, username per sekolah, impor sekolah, kunci login', () => {
+  beforeEach(kosongkanDb);
+
+  async function sekolahDenganOperator(admin: ReturnType<typeof request.agent>, npsn: string, nama: string, username: string) {
+    const id = (await admin.post('/api/admin/sekolah').send({ nama, npsn }).expect(200)).body.id;
+    await admin.post('/api/admin/pengguna').send({ nama: `Op ${nama}`, username, peran: 'OPERATOR', sekolahId: id, password: 'rahasia1' }).expect(200);
+    const op = request.agent(app);
+    await op.post('/api/auth/staf/login').send({ username, password: 'rahasia1' }).expect(200);
+    return { id, op };
+  }
+
+  it('operator membuat soal & ujian sekolah; soal instansi tidak terlihat; ujian instansi tidak bisa diubah', async () => {
+    const { admin, siswa, ujianId, sekolahId } = await siapkan();
+    const op = request.agent(app);
+    await admin.post('/api/admin/pengguna').send({ nama: 'Op', username: 'opa', peran: 'OPERATOR', sekolahId, password: 'rahasia1' }).expect(200);
+    await op.post('/api/auth/staf/login').send({ username: 'opa', password: 'rahasia1' }).expect(200);
+    const { id: sekolahB, op: opB } = await sekolahDenganOperator(admin, '20100002', 'SDN B', 'opb');
+
+    // Soal instansi (MTK001..003) tidak terlihat oleh operator.
+    expect((await op.get('/api/admin/soal').expect(200)).body).toHaveLength(0);
+    const soalSekolah = { mataPelajaran: 'Matematika', kelas: '6', pertanyaan: '1+1?', opsi: ['1', '2', '3', '4'], kunci: 'B' };
+    const s1 = (await op.post('/api/admin/soal').send(soalSekolah).expect(200)).body.id;
+    expect(s1).toBe('20100001-MTK001');
+    await op.post('/api/admin/soal').send({ ...soalSekolah, id: 'MTK001' }).expect(400); // jadi 20100001-MTK001: sudah dipakai
+    await op.post('/api/admin/soal/impor').send({ baris: [{ nomor: 2, ...soalSekolah, opsiA: '1', opsiB: '2', opsiC: '3', opsiD: '4' }] }).expect(200);
+    expect((await op.get('/api/admin/soal').expect(200)).body.map((x: { id: string }) => x.id)).toEqual(['20100001-MTK001', '20100001-MTK002']);
+    expect((await admin.get('/api/admin/soal').expect(200)).body).toHaveLength(3);
+    expect((await admin.get(`/api/admin/soal?sekolahId=${sekolahId}`).expect(200)).body).toHaveLength(2);
+    await opB.put(`/api/admin/soal/${s1}`).send(soalSekolah).expect(404);
+    await opB.post('/api/admin/soal/hapus').send({ ids: [s1, 'MTK001'] }).expect(200);
+    expect(await prisma.soal.count()).toBe(5);
+
+    // Ujian instansi tidak bisa diubah/dihapus/diganti tokennya oleh operator.
+    await op.put(`/api/admin/ujian/${ujianId}`).send({ nama: 'X', mataPelajaran: 'Matematika' }).expect(404);
+    await op.delete(`/api/admin/ujian/${ujianId}`).expect(404);
+    await op.post(`/api/admin/ujian/${ujianId}/token`).expect(404);
+
+    // Ujian sekolah: hanya untuk sekolahnya, memakai soal sekolahnya (walau operator mengirim sekolah lain).
+    const uS = (await op.post('/api/admin/ujian').send({ nama: 'Ulangan Kelas 6', mataPelajaran: 'Matematika', kelas: '6', sekolah: [sekolahB] }).expect(200)).body.id;
+    expect(await prisma.ujian.findUniqueOrThrow({ where: { id: uS } })).toMatchObject({ pemilikId: sekolahId, sekolah: [sekolahId] });
+    const daftar = (await op.get('/api/admin/ujian').expect(200)).body.ujian;
+    expect(daftar.find((u: { id: string }) => u.id === uS)).toMatchObject({ bolehUbah: true, soalPerKelas: { 6: 2 } });
+    expect(daftar.find((u: { id: string }) => u.id === ujianId)).toMatchObject({ bolehUbah: false, soalPerKelas: {} });
+    expect((await opB.get('/api/admin/ujian').expect(200)).body.ujian.map((u: { id: string }) => u.id)).not.toContain(uS);
+    await opB.put(`/api/admin/ujian/${uS}`).send({ nama: 'X', mataPelajaran: 'Matematika' }).expect(404);
+
+    const paket = (await siswa.post(`/api/siswa/ujian/${uS}/mulai`).send({}).expect(200)).body;
+    expect(paket.soal.map((x: { id: string }) => x.id).sort()).toEqual(['20100001-MTK001', '20100001-MTK002']);
+    const paketInstansi = (await siswa.post(`/api/siswa/ujian/${ujianId}/mulai`).send({}).expect(200)).body;
+    expect(paketInstansi.soal.every((x: { id: string }) => !x.id.includes('-'))).toBe(true);
+    await op.put(`/api/admin/ujian/${uS}`).send({ nama: 'Ulangan Diubah', mataPelajaran: 'Matematika', kelas: '6' }).expect(200);
+    expect((await op.get('/api/admin/dashboard')).body.jumlahSoal).toBe(2);
+  });
+
+  it('username siswa boleh sama di sekolah berbeda; login memakai pilihan sekolah', async () => {
+    const { admin, sekolahId } = await siapkan();
+    const { id: sekolahB, op: opB } = await sekolahDenganOperator(admin, '20100002', 'SDN B', 'opb');
+    await opB.post('/api/admin/siswa').send({ nama: 'Kembar', kelas: '6', username: 'uji_tka', password: 'kembarB1' }).expect(200);
+    await opB.post('/api/admin/siswa').send({ nama: 'Kembar 2', kelas: '6', username: 'uji_tka' }).expect(400);
+    expect((await request(app).get('/api/sekolah').expect(200)).body.map((x: { nama: string }) => x.nama)).toEqual(['SDN B', 'SDN Johar Baru 01 Pagi']);
+
+    await request(app).post('/api/auth/siswa/login').send({ username: 'uji_tka', password: 'kembarB1' }).expect(400);
+    const b = await request(app).post('/api/auth/siswa/login').send({ username: 'uji_tka', password: 'kembarB1', sekolahId: sekolahB }).expect(200);
+    expect(b.body.profil).toMatchObject({ nama: 'Kembar', namaSekolah: 'SDN B' });
+    await request(app).post('/api/auth/siswa/login').send({ username: 'uji_tka', password: 'kembarB1', sekolahId }).expect(401);
+    await request(app).post('/api/auth/siswa/login').send({ username: 'uji_tka', password: 'LatihanTKA2026!', sekolahId }).expect(200);
+
+    // Admin tidak bisa memindahkan siswa ke sekolah yang sudah punya username sama.
+    const a = await prisma.siswa.findFirstOrThrow({ where: { sekolahId } });
+    await admin.put(`/api/admin/siswa/${a.id}`).send({ nama: a.nama, kelas: '6', sekolahId: sekolahB }).expect(400);
+  });
+
+  it('impor sekolah & operator: buat, perbarui lewat NPSN, operator otomatis, tolak NPSN salah', async () => {
+    const { admin } = await siapkan();
+    const r1 = (await admin.post('/api/admin/sekolah/impor').send({ baris: [
+      { nomor: 2, npsn: '20100001', nama: 'SDN Johar Baru 01 Pagi (baru)', alamat: 'Jl. Johar' },
+      { nomor: 3, npsn: '20100009', nama: 'SDN Sembilan' },
+      { nomor: 4, npsn: '', nama: 'SDN Tanpa NPSN', namaOperator: 'Bu Ani', usernameOperator: 'opani', passwordOperator: 'aniani12' },
+      { nomor: 5, npsn: '123', nama: 'Salah' },
+      { nomor: 6, npsn: '20100010', nama: 'SDN Sepuluh', usernameOperator: 'admin' },
+    ] }).expect(200)).body;
+    expect(r1).toMatchObject({ dibuat: 3, diperbarui: 1 });
+    expect(r1.akun.map((a: { username: string }) => a.username)).toEqual(['op20100001', 'op20100009', 'opani']);
+    expect(r1.ditolak.map((d: { nomor: number }) => d.nomor)).toEqual([5, 6]);
+    expect((await prisma.sekolah.findUniqueOrThrow({ where: { npsn: '20100001' } })).nama).toBe('SDN Johar Baru 01 Pagi (baru)');
+    await request(app).post('/api/auth/staf/login').send({ username: 'opani', password: 'aniani12' }).expect(200);
+    await request(app).post('/api/auth/staf/login').send({ username: 'op20100009', password: r1.akun[1].password }).expect(200);
+
+    // Impor ulang: sekolah yang sudah punya operator tidak dibuatkan lagi.
+    const r2 = (await admin.post('/api/admin/sekolah/impor').send({ baris: [{ nomor: 2, npsn: '20100009', nama: '' }] }).expect(200)).body;
+    expect(r2).toMatchObject({ dibuat: 0, diperbarui: 1, akun: [] });
+    expect((await prisma.sekolah.findUniqueOrThrow({ where: { npsn: '20100009' } })).nama).toBe('SDN Sembilan');
+  });
+
+  it('kunci login tersimpan di database dan dihapus setelah login berhasil', async () => {
+    await siapkan();
+    for (let i = 0; i < 3; i++) await request(app).post('/api/auth/staf/login').send({ username: 'admin', password: 'salah' }).expect(401);
+    expect((await prisma.gagalLogin.findFirstOrThrow()).jumlah).toBe(3);
+    // Masa kunci lewat: hitungan mulai dari 1 lagi.
+    await prisma.gagalLogin.updateMany({ data: { sampai: new Date(Date.now() - 1000) } });
+    await request(app).post('/api/auth/staf/login').send({ username: 'admin', password: 'salah' }).expect(401);
+    expect((await prisma.gagalLogin.findFirstOrThrow()).jumlah).toBe(1);
+    await request(app).post('/api/auth/staf/login').send({ username: 'admin', password: 'admin123' }).expect(200);
+    expect(await prisma.gagalLogin.count()).toBe(0);
   });
 });
 

@@ -27,21 +27,32 @@ async function profilSiswa(s: { nama: string; kelas: string; username: string; n
 
 const PESAN_SEKOLAH_NONAKTIF = 'Sekolah Anda sedang dinonaktifkan. Silakan hubungi Suku Dinas Pendidikan.';
 
+/**
+ * Username siswa unik per sekolah. Bila sekolah tidak dikirim dan username hanya
+ * ada di satu sekolah, login tetap berhasil; bila ada di beberapa sekolah, siswa diminta memilih.
+ */
 rutAuth.post('/siswa/login', async (req, res) => {
-  const { username, password } = skemaLogin.parse(req.body);
-  const kunci = `siswa:${username}`;
-  cekKunciLogin(kunci);
+  const { username, password, sekolahId } = skemaLogin.extend({ sekolahId: z.string().nullish() }).parse(req.body);
+  const cocok = await prisma.siswa.findMany({
+    where: { username: { equals: username, mode: 'insensitive' }, ...(sekolahId ? { sekolahId } : {}) },
+    include: { sekolah: true },
+    take: 2,
+  });
+  if (cocok.length > 1) throw galat(400, 'Pilih sekolah Anda terlebih dahulu.');
+  const siswa = cocok[0];
+  // Kunci per akun, sehingga mengganti pilihan sekolah tidak menambah jatah percobaan.
+  const kunci = siswa ? `siswa:${siswa.id}` : `siswa:?:${sekolahId ?? ''}:${username}`;
+  await cekKunciLogin(kunci);
 
-  const siswa = await prisma.siswa.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, include: { sekolah: true } });
   const cek = siswa ? await cocokPassword(password, siswa.passwordHash) : { cocok: false, perluUpgrade: false };
   if (!siswa || !cek.cocok) {
-    catatGagalLogin(kunci);
+    await catatGagalLogin(kunci);
     throw galat(401, 'Username atau kata sandi salah.');
   }
   if (!siswa.aktif) throw galat(403, 'Akun belum aktif. Silakan hubungi operator sekolah.');
   if (!siswa.sekolah.aktif) throw galat(403, PESAN_SEKOLAH_NONAKTIF);
 
-  hapusGagalLogin(kunci);
+  await hapusGagalLogin(kunci);
   await prisma.siswa.update({
     where: { id: siswa.id },
     data: { loginTerakhir: new Date(), ...(cek.perluUpgrade ? { passwordHash: await hashPassword(password) } : {}) },
@@ -53,18 +64,18 @@ rutAuth.post('/siswa/login', async (req, res) => {
 rutAuth.post('/staf/login', async (req, res) => {
   const { username, password } = skemaLogin.parse(req.body);
   const kunci = `staf:${username}`;
-  cekKunciLogin(kunci);
+  await cekKunciLogin(kunci);
 
   const p = await prisma.pengguna.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, include: { sekolah: true } });
   const cek = p ? await cocokPassword(password, p.passwordHash) : { cocok: false, perluUpgrade: false };
   if (!p || !cek.cocok) {
-    catatGagalLogin(kunci);
+    await catatGagalLogin(kunci);
     throw galat(401, 'Username atau kata sandi salah.');
   }
   if (!p.aktif) throw galat(403, 'Akun tidak aktif.');
   if (p.peran !== 'ADMIN' && !p.sekolah?.aktif) throw galat(403, PESAN_SEKOLAH_NONAKTIF);
 
-  hapusGagalLogin(kunci);
+  await hapusGagalLogin(kunci);
   await prisma.pengguna.update({ where: { id: p.id }, data: { loginTerakhir: new Date() } });
   await mulaiSesi(res, 'STAF', p.id);
   await catatLog(p, 'LOGIN');

@@ -4,16 +4,35 @@ import { prisma } from '../../db.ts';
 import { hapusBerkas, simpanGambar, unggah } from '../../lib/berkas.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
-import { dataSoal, idSoalBerikutnya } from '../../lib/soal.ts';
-import { butuhStaf } from '../../lib/sesi.ts';
+import { awalanSoalSekolah, dataSoal, idSoalBerikutnya } from '../../lib/soal.ts';
+import { butuhStaf, sekolahStaf, type Staf } from '../../lib/sesi.ts';
 import { teks } from '../../lib/util.ts';
 
+/**
+ * Bank soal.
+ * - Admin instansi: bank soal instansi (dipakai ujian instansi), dan bisa melihat/mengubah soal sekolah.
+ * - Operator sekolah: hanya bank soal sekolahnya untuk ujian internal. Soal instansi tidak pernah
+ *   terlihat oleh sekolah, sehingga kunci jawaban ujian bersama tidak bocor.
+ */
 export const rutAdminSoal = Router();
-// Bank soal dikelola terpusat oleh admin instansi.
-rutAdminSoal.use(butuhStaf('ADMIN'));
+rutAdminSoal.use(butuhStaf('ADMIN', 'OPERATOR'));
 
-rutAdminSoal.get('/', async (_req, res) => {
-  res.json(await prisma.soal.findMany({ orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }, { id: 'asc' }] }));
+/** Pemilik soal yang sedang dikelola: operator = sekolahnya; admin = ?sekolahId= (kosong = instansi). */
+function pemilik(staf: Staf, pilihan: unknown): string | null {
+  return sekolahStaf(staf) ?? (typeof pilihan === 'string' && pilihan ? pilihan : null);
+}
+
+/** Filter soal yang boleh diubah staf ini. */
+const milikStaf = (staf: Staf) => {
+  const s = sekolahStaf(staf);
+  return s ? { sekolahId: s } : {};
+};
+
+rutAdminSoal.get('/', async (req, res) => {
+  res.json(await prisma.soal.findMany({
+    where: { sekolahId: pemilik(req.staf!, req.query.sekolahId) },
+    orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }, { id: 'asc' }],
+  }));
 });
 
 /** Unggah gambar dulu, lalu simpan namanya bersama soal. */
@@ -28,7 +47,21 @@ const skemaSoal = z.object({
   skor: z.union([z.number(), z.string()]).default(1), tipe: z.enum(['PG', 'PGK']).default('PG'),
   pembahasan: z.string().default(''), aktif: z.boolean().default(true),
   gambar: z.string().nullable().default(null),
+  sekolahId: z.string().nullish(), // hanya dipakai admin; operator selalu sekolahnya
 });
+
+async function pastikanSekolahAda(id: string | null) {
+  if (id && !(await prisma.sekolah.findUnique({ where: { id }, select: { id: true } }))) throw galat(400, 'Sekolah tidak ditemukan.');
+}
+
+/** ID sah dengan awalan sekolah (ditambahkan otomatis bila belum ada). */
+async function idSoal(diminta: string, mapel: string, sekolahId: string | null, dipakai?: Set<string>) {
+  const awalan = await awalanSoalSekolah(sekolahId);
+  if (!diminta) return idSoalBerikutnya(mapel, dipakai, awalan);
+  const id = diminta.startsWith(awalan) ? diminta : awalan + diminta;
+  if (!/^[A-Z0-9_-]{2,30}$/.test(id)) throw galat(400, 'ID soal hanya boleh huruf, angka, _ atau -, maksimal 30 karakter.');
+  return id;
+}
 
 /** Gambar lama dibuang dari disk bila tidak dipakai soal lain. */
 async function buangGambarTakTerpakai(nama: (string | null)[]) {
@@ -40,17 +73,18 @@ async function buangGambarTakTerpakai(nama: (string | null)[]) {
 rutAdminSoal.post('/', async (req, res) => {
   const d = skemaSoal.parse(req.body);
   const data = dataSoal(d);
-  const id = d.id || (await idSoalBerikutnya(data.mataPelajaran));
-  if (!/^[A-Z0-9_-]{2,30}$/.test(id)) throw galat(400, 'ID soal hanya boleh huruf, angka, _ atau -.');
+  const sekolahId = pemilik(req.staf!, d.sekolahId);
+  await pastikanSekolahAda(sekolahId);
+  const id = await idSoal(d.id, data.mataPelajaran, sekolahId);
   if (await prisma.soal.findUnique({ where: { id } })) throw galat(400, `ID soal ${id} sudah dipakai.`);
-  await prisma.soal.create({ data: { ...data, id, gambar: d.gambar } });
+  await prisma.soal.create({ data: { ...data, id, gambar: d.gambar, sekolahId } });
   await catatLog(req.staf!, 'TAMBAH_SOAL', id);
   res.json({ pesan: `Soal ${id} ditambahkan.`, id });
 });
 
 rutAdminSoal.put('/:id', async (req, res) => {
   const d = skemaSoal.parse(req.body);
-  const lama = await prisma.soal.findUnique({ where: { id: String(req.params.id) } });
+  const lama = await prisma.soal.findFirst({ where: { id: String(req.params.id), ...milikStaf(req.staf!) } });
   if (!lama) throw galat(404, 'Soal tidak ditemukan.');
   await prisma.soal.update({ where: { id: lama.id }, data: { ...dataSoal(d), gambar: d.gambar } });
   if (lama.gambar !== d.gambar) await buangGambarTakTerpakai([lama.gambar]);
@@ -62,8 +96,9 @@ const skemaIds = z.object({ ids: z.array(z.string()).min(1, 'Pilih minimal satu 
 
 rutAdminSoal.post('/hapus', async (req, res) => {
   const { ids } = skemaIds.parse(req.body);
-  const gambar = (await prisma.soal.findMany({ where: { id: { in: ids } }, select: { gambar: true } })).map((s) => s.gambar);
-  const r = await prisma.soal.deleteMany({ where: { id: { in: ids } } });
+  const where = { id: { in: ids }, ...milikStaf(req.staf!) };
+  const gambar = (await prisma.soal.findMany({ where, select: { gambar: true } })).map((s) => s.gambar);
+  const r = await prisma.soal.deleteMany({ where });
   await buangGambarTakTerpakai(gambar);
   await catatLog(req.staf!, 'HAPUS_SOAL', ids.join(', '));
   res.json({ pesan: `${r.count} soal dihapus.` });
@@ -71,14 +106,19 @@ rutAdminSoal.post('/hapus', async (req, res) => {
 
 rutAdminSoal.post('/status', async (req, res) => {
   const { ids, aktif } = skemaIds.extend({ aktif: z.boolean() }).parse(req.body);
-  await prisma.soal.updateMany({ where: { id: { in: ids } }, data: { aktif } });
+  const r = await prisma.soal.updateMany({ where: { id: { in: ids }, ...milikStaf(req.staf!) }, data: { aktif } });
   await catatLog(req.staf!, aktif ? 'AKTIFKAN_SOAL' : 'NONAKTIFKAN_SOAL', ids.join(', '));
-  res.json({ pesan: `${ids.length} soal ${aktif ? 'diaktifkan' : 'dinonaktifkan'}.` });
+  res.json({ pesan: `${r.count} soal ${aktif ? 'diaktifkan' : 'dinonaktifkan'}.` });
 });
 
 /** Impor dari tabel yang ditempel (Excel/Sheets/CSV) di browser. */
 rutAdminSoal.post('/impor', async (req, res) => {
-  const { baris } = z.object({ baris: z.array(z.record(z.string(), z.unknown())).max(500, 'Maksimal 500 soal per proses.') }).parse(req.body);
+  const { baris, sekolahId: pilihan } = z.object({
+    sekolahId: z.string().nullish(),
+    baris: z.array(z.record(z.string(), z.unknown())).max(500, 'Maksimal 500 soal per proses.'),
+  }).parse(req.body);
+  const sekolahId = pemilik(req.staf!, pilihan);
+  await pastikanSekolahAda(sekolahId);
   const dipakai = new Set((await prisma.soal.findMany({ select: { id: true } })).map((s) => s.id));
   const idBaru = new Set<string>();
   const ditolak = [];
@@ -90,10 +130,9 @@ rutAdminSoal.post('/impor', async (req, res) => {
         mataPelajaran: b.mataPelajaran, kelas: b.kelas, pertanyaan: b.pertanyaan,
         opsi: [b.opsiA, b.opsiB, b.opsiC, b.opsiD], kunci: b.kunci, skor: b.skor, tipe: b.tipe, pembahasan: b.pembahasan,
       });
-      let id = teks(b.id).toUpperCase();
-      if (id && dipakai.has(id)) throw galat(400, `ID ${id} sudah dipakai.`);
-      if (!id) id = await idSoalBerikutnya(data.mataPelajaran, idBaru);
-      await prisma.soal.create({ data: { ...data, id } });
+      const id = await idSoal(teks(b.id).toUpperCase(), data.mataPelajaran, sekolahId, idBaru);
+      if (dipakai.has(id)) throw galat(400, `ID ${id} sudah dipakai.`);
+      await prisma.soal.create({ data: { ...data, id, sekolahId } });
       dipakai.add(id);
       idBaru.add(id);
       jumlah++;

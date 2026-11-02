@@ -6,7 +6,6 @@ import { catatLog } from '../../lib/log.ts';
 import { hashPassword } from '../../lib/password.ts';
 import { butuhStaf, filterSekolah, type Staf } from '../../lib/sesi.ts';
 import { buatPasswordAcak } from '../../lib/util.ts';
-import { usernameDipakai } from './siswa.ts';
 
 /**
  * Akun staf.
@@ -55,13 +54,17 @@ async function akunTerjangkau(staf: Staf, id: string) {
   return p;
 }
 
+/** Username petugas unik di seluruh instansi (login petugas tanpa memilih sekolah). */
+export const usernameStafDipakai = async (username: string) =>
+  !!(await prisma.pengguna.findFirst({ where: { username: { equals: username, mode: 'insensitive' } }, select: { id: true } }));
+
 const jumlahAdminAktifSelain = (id: string) =>
   prisma.pengguna.count({ where: { peran: 'ADMIN', aktif: true, id: { not: id } } });
 
 rutAdminPengguna.post('/', async (req, res) => {
   const d = skema.parse(req.body);
   if (!/^[a-z0-9._-]{3,30}$/.test(d.username)) throw galat(400, 'Username harus 3 sampai 30 huruf kecil, angka, titik, garis bawah, atau strip.');
-  if (await usernameDipakai(d.username)) throw galat(400, `Username ${d.username} sudah dipakai.`);
+  if (await usernameStafDipakai(d.username)) throw galat(400, `Username ${d.username} sudah dipakai.`);
   const { peran, sekolahId } = await peranDanSekolah(req.staf!, d);
   const password = d.password || buatPasswordAcak();
   await prisma.pengguna.create({

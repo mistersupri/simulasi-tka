@@ -67,6 +67,8 @@ model Sekolah {
   pengguna Pengguna[]
   siswa    Siswa[]
   hasil    Hasil[]
+  soal     Soal[]
+  ujian    Ujian[]    // ujian internal buatan sekolah
 }
 
 model Pengguna {
@@ -91,7 +93,7 @@ model Siswa {
   nisn          String    @default("")
   nama          String
   kelas         String
-  username      String    @unique
+  username      String    // unik per sekolah; saat login siswa memilih sekolahnya
   passwordHash  String
   sekolah       Sekolah   @relation(fields: [sekolahId], references: [id], onDelete: Restrict)
   sekolahId     String
@@ -102,6 +104,8 @@ model Siswa {
   sesiUjian     SesiUjian[]
   hasil         Hasil[]
 
+  @@unique([sekolahId, username])
+  @@index([username])
   @@index([sekolahId, kelas])
   @@index([kelas])
 }
@@ -131,10 +135,14 @@ model Soal {
   gambar        String?  // nama berkas di UPLOAD_DIR/gambar
   pembahasan    String   @default("")
   aktif         Boolean  @default(true)
+  // Kosong = bank soal instansi; terisi = soal internal sekolah (hanya untuk ujian sekolah itu).
+  sekolah       Sekolah? @relation(fields: [sekolahId], references: [id], onDelete: Cascade)
+  sekolahId     String?
   dibuat        DateTime @default(now())
   diubah        DateTime @updatedAt
 
   @@index([mataPelajaran, kelas])
+  @@index([sekolahId, mataPelajaran, kelas])
 }
 
 model Ujian {
@@ -143,6 +151,9 @@ model Ujian {
   mataPelajaran       String
   kelas               String[]  // kosong = semua kelas
   sekolah             String[]  @default([]) // id sekolah peserta; kosong = semua sekolah
+  // Kosong = ujian instansi (soal dari bank instansi); terisi = ujian internal sekolah itu.
+  pemilik             Sekolah?  @relation(fields: [pemilikId], references: [id], onDelete: Cascade)
+  pemilikId           String?
   durasiMenit         Int       @default(60) // 0 = tanpa batas
   jumlahSoal          Int       @default(0)  // 0 = semua soal
   waktuMulai          DateTime?
@@ -263,4 +274,14 @@ model LogAktivitas {
 
   @@index([waktu])
   @@index([sekolahId, waktu])
+}
+
+// Penguncian login setelah beberapa kali salah kata sandi. Disimpan di database
+// agar berlaku walau server dijalankan lebih dari satu proses/instance.
+model GagalLogin {
+  kunci  String   @id
+  jumlah Int
+  sampai DateTime
+
+  @@index([sampai])
 }

@@ -54,13 +54,20 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 
 | Peran | Siapa | Bisa apa |
 |---|---|---|
-| Admin instansi | Suku Dinas | Semua sekolah: daftar sekolah, bank soal, jadwal ujian (untuk semua atau sebagian sekolah), semua akun, data siswa, monitor, hasil & perbandingan antarsekolah, pengaturan, log. |
-| Operator sekolah | 1 per sekolah atau lebih | Hanya sekolahnya: tambah/ubah/impor siswa & cetak kartu login, akun guru, monitor ujian (tambah waktu, kirim paksa, reset), jadwal & token, hasil, log akun sekolahnya. |
+| Admin instansi | Suku Dinas | Semua sekolah: daftar & impor sekolah beserta operatornya, bank soal instansi, ujian bersama (untuk semua atau sebagian sekolah), semua akun, data siswa, monitor, hasil & perbandingan antarsekolah, pengaturan, log. |
+| Operator sekolah | 1 per sekolah atau lebih | Hanya sekolahnya: tambah/ubah/impor siswa & cetak kartu login, akun guru, **bank soal & ujian internal sekolah**, monitor ujian (tambah waktu, kirim paksa, reset), token ujian bersama, hasil, log akun sekolahnya. |
 | Guru | Sekolah | Hanya melihat hasil & analisis siswa sekolahnya, dan mengunduhnya. |
 
 Pembatasan dilakukan di server (bukan hanya menu yang disembunyikan): operator dan guru tidak
 bisa membuka data sekolah lain walau mengubah alamat atau parameter permintaan.
 Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operatornya.
+
+- **Ujian bersama vs ujian sekolah.** Ujian bersama dibuat admin instansi dan memakai bank soal
+  instansi; soal ini tidak pernah terlihat oleh sekolah. Ujian sekolah dibuat operator, hanya untuk
+  siswa sekolah itu, dan memakai bank soal sekolah itu (ID soal diawali NPSN, mis. `20100001-MTK001`).
+- **Username siswa unik per sekolah.** Dua sekolah boleh sama-sama punya `budi123`. Bila ada lebih
+  dari satu sekolah, form login siswa menampilkan pilihan sekolah yang diingat di perangkat itu
+  (komputer lab cukup memilih sekali). Username petugas tetap unik untuk seluruh instansi.
 
 - Bank soal: tambah/ubah, gambar, PG kompleks, pratinjau, impor tempel dari Excel/CSV, unduh.
 - Jadwal ujian: mapel, kelas, durasi, jumlah soal acak, jadwal buka/tutup, token, acak opsi,
@@ -75,11 +82,14 @@ Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operator
   sandi lama; hash otomatis diperbarui ke scrypt saat login.
 
 **Mulai pakai untuk banyak sekolah**
-1. Admin instansi: menu **Sekolah**, tambahkan sekolah binaan (NPSN disarankan).
-2. Menu **Pengguna**: buat akun **Operator sekolah** untuk tiap sekolah, cetak/bagikan kata sandinya.
+1. Admin instansi: menu **Sekolah**, **Impor sekolah & operator**: tempel daftar sekolah dari Excel
+   (NPSN, NAMA_SEKOLAH, ALAMAT, dan opsional NAMA/USERNAME/PASSWORD_OPERATOR). Akun operator dibuat
+   otomatis (username `op<NPSN>`), lalu cetak kartu loginnya. Impor ulang memperbarui sekolah yang
+   sudah ada lewat NPSN.
+2. Akun operator atau guru tambahan bisa dibuat satu per satu di menu **Pengguna**.
 3. Operator: impor siswa sekolahnya di **Data siswa**, cetak kartu login, buat akun guru.
 4. Admin: isi **Bank soal**, buat **Jadwal ujian**, pilih sekolah peserta.
-5. Hari ujian: operator membacakan token dari menu **Jadwal & token** dan memantau di **Monitor ujian**.
+5. Hari ujian: operator membacakan token dari menu **Jadwal ujian** dan memantau di **Monitor ujian**.
 
 Memperbarui dari versi satu sekolah: `prisma migrate deploy` memindahkan semua siswa, guru, dan
 hasil lama ke sekolah pertama bernama sesuai pengaturan lama, akun guru tetap guru di sekolah itu,
@@ -163,12 +173,13 @@ web/
   oleh petugas dari sekolah siswa itu (dan admin instansi).
 - Content-Security-Policy hanya mengizinkan sumber dari server sendiri. Ini juga memblokir
   telemetri bawaan MediaPipe ke Google, jadi tidak ada data dari perangkat siswa yang keluar.
-- 5 kali salah kata sandi mengunci login 5 menit (disimpan di memori proses; untuk lebih dari
-  satu instance server, ganti dengan penyimpanan bersama).
+- 5 kali salah kata sandi mengunci login 5 menit. Hitungan disimpan di database (tabel
+  `GagalLogin`), jadi tetap berlaku bila server dijalankan beberapa instance di belakang load
+  balancer. Untuk beberapa instance, folder `UPLOAD_DIR` juga harus dibagi bersama (mis. NFS).
 
 ## Tes
 
 ```bash
 createdb simulasi_tka_test     # sekali saja
-npm test                       # 22 skenario API: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor
+npm test                       # 26 skenario API: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor
 ```

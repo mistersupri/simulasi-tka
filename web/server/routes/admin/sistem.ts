@@ -19,8 +19,9 @@ rutAdminSistem.get('/dashboard', butuhStaf(), async (req, res) => {
     prisma.siswa.count({ where: sk }),
     prisma.siswa.count({ where: { aktif: true, ...sk } }),
     prisma.siswa.groupBy({ by: ['kelas'], where: sk, _count: true, orderBy: { kelas: 'asc' } }),
-    prisma.soal.groupBy({ by: ['mataPelajaran', 'kelas'], _count: true, orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }] }),
-    prisma.soal.count(),
+    // Admin: bank soal instansi; operator & guru: bank soal sekolahnya.
+    prisma.soal.groupBy({ by: ['mataPelajaran', 'kelas'], where: { sekolahId }, _count: true, orderBy: [{ mataPelajaran: 'asc' }, { kelas: 'asc' }] }),
+    prisma.soal.count({ where: { sekolahId } }),
     prisma.ujian.findMany({
       where: sekolahId ? { OR: [{ sekolah: { isEmpty: true } }, { sekolah: { has: sekolahId } }] } : {},
       select: { aktif: true, waktuMulai: true, waktuSelesai: true },

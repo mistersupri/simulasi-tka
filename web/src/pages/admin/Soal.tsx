@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  BilahPilihan, DialogDitolak, DialogImpor, KepalaHalaman, usePilihan, type Ditolak,
+  BilahPilihan, DialogDitolak, DialogImpor, KepalaHalaman, paramSekolah, useDaftarSekolah, usePilihan, useStaf, type Ditolak,
 } from '@/components/admin';
 import { GambarSoal } from '@/components/GambarSoal';
 import { useKonfirmasi } from '@/components/Konfirmasi';
@@ -42,10 +42,18 @@ const KOLOM_IMPOR: KolomImpor[] = [
   { kunci: 'pembahasan', header: ['PEMBAHASAN'] },
 ];
 
+const INSTANSI = 'instansi';
+
 export default function HalamanSoal() {
   const qc = useQueryClient();
+  const staf = useStaf();
+  const admin = staf.peran === 'ADMIN';
+  const daftarSekolah = useDaftarSekolah();
+  // Admin mengelola bank instansi (bawaan) dan bisa membuka bank soal sekolah; operator selalu bank sekolahnya.
+  const [pemilik, setPemilik] = useState(INSTANSI);
+  const sekolahId = admin && pemilik !== INSTANSI ? pemilik : null;
   const [konfirmasi, dialogKonfirmasi] = useKonfirmasi();
-  const q = useQuery({ queryKey: ['soal'], queryFn: () => api.get<Soal[]>('/admin/soal') });
+  const q = useQuery({ queryKey: ['soal', pemilik], queryFn: () => api.get<Soal[]>(`/admin/soal${paramSekolah(sekolahId ?? '')}`) });
   const [cari, setCari] = useState('');
   const [mapel, setMapel] = useState(SEMUA);
   const [kelas, setKelas] = useState(SEMUA);
@@ -73,7 +81,15 @@ export default function HalamanSoal() {
 
   return (
     <>
-      <KepalaHalaman judul="Bank soal" keterangan={q.data ? `${semua.length} soal tersimpan` : undefined}>
+      <KepalaHalaman
+        judul={admin ? 'Bank soal' : 'Bank soal sekolah'}
+        keterangan={<>
+          {q.data && `${semua.length} soal tersimpan. `}
+          {admin
+            ? (sekolahId ? 'Soal milik sekolah ini hanya dipakai ujian internal sekolahnya.' : 'Bank soal instansi dipakai ujian bersama dan tidak terlihat oleh sekolah.')
+            : 'Soal untuk ujian internal sekolah Anda. Soal ujian bersama dari Suku Dinas tidak ditampilkan di sini.'}
+        </>}
+      >
         <Button variant="outline" disabled={!semua.length} onClick={() => unduhCsv('bank-soal.csv', [
           KOLOM_IMPOR.map((k) => k.header[0]),
           ...semua.map((s) => [s.id, s.mataPelajaran, s.kelas, s.pertanyaan, ...s.opsi, s.kunci, s.skor, s.tipe, s.pembahasan]),
@@ -82,6 +98,17 @@ export default function HalamanSoal() {
         <Button onClick={() => setForm('baru')}><Plus /> Tambah soal</Button>
       </KepalaHalaman>
 
+      {admin && (
+        <div className="mb-2 max-w-sm">
+          <Select value={pemilik} onValueChange={setPemilik}>
+            <SelectTrigger aria-label="Pemilik bank soal"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={INSTANSI}>Bank soal instansi</SelectItem>
+              {daftarSekolah.data?.map((x) => <SelectItem key={x.id} value={x.id}>Soal sekolah: {x.nama}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="mb-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
         <Input type="search" placeholder="Cari ID atau isi soal..." aria-label="Cari soal" value={cari} onChange={(e) => setCari(e.target.value)} />
         <Select value={mapel} onValueChange={setMapel}>
@@ -138,7 +165,7 @@ export default function HalamanSoal() {
         </Table>
       )}
 
-      {form && <FormSoal soal={form === 'baru' ? null : form} daftarMapel={daftarMapel} tutup={() => setForm(null)} />}
+      {form && <FormSoal soal={form === 'baru' ? null : form} sekolahId={sekolahId} daftarMapel={daftarMapel} tutup={() => setForm(null)} />}
       <DialogPratinjau soal={pratinjau} tutup={() => setPratinjau(null)} />
       <DialogImpor
         buka={impor} setBuka={setImpor} judul="Impor soal" kolom={KOLOM_IMPOR}
@@ -150,7 +177,7 @@ export default function HalamanSoal() {
           let jumlah = 0;
           const tolak: Ditolak[] = [];
           for (let i = 0; i < baris.length; i += 200) {
-            const r = await api.post<{ jumlah: number; ditolak: Ditolak[] }>('/admin/soal/impor', { baris: baris.slice(i, i + 200) })
+            const r = await api.post<{ jumlah: number; ditolak: Ditolak[] }>('/admin/soal/impor', { sekolahId, baris: baris.slice(i, i + 200) })
               .catch((e) => { toast.error(pesanGalat(e)); throw e; });
             jumlah += r.jumlah;
             tolak.push(...r.ditolak);
@@ -167,7 +194,7 @@ export default function HalamanSoal() {
   );
 }
 
-function FormSoal({ soal, daftarMapel, tutup }: { soal: Soal | null; daftarMapel: string[]; tutup: () => void }) {
+function FormSoal({ soal, sekolahId, daftarMapel, tutup }: { soal: Soal | null; sekolahId: string | null; daftarMapel: string[]; tutup: () => void }) {
   const qc = useQueryClient();
   const [d, setD] = useState(() => ({
     id: soal?.id ?? '',
@@ -188,7 +215,7 @@ function FormSoal({ soal, daftarMapel, tutup }: { soal: Soal | null; daftarMapel
 
   const simpan = useMutation({
     mutationFn: () => {
-      const body = { ...d, kunci: d.kunci.join(','), skor: Number(d.skor) };
+      const body = { ...d, kunci: d.kunci.join(','), skor: Number(d.skor), sekolahId };
       return soal ? api.put<{ pesan: string }>(`/admin/soal/${soal.id}`, body) : api.post<{ pesan: string }>('/admin/soal', body);
     },
     onSuccess: (r) => { toast.success(r.pesan); qc.invalidateQueries({ queryKey: ['soal'] }); tutup(); },

@@ -98,30 +98,33 @@ export function butuhStaf(...peran: Peran[]) {
   };
 }
 
-// Penguncian sementara setelah beberapa kali salah kata sandi.
-// Disimpan di memori: cukup untuk satu proses server.
-const gagalLogin = new Map<string, { jumlah: number; sampai: number }>();
+// Penguncian sementara setelah beberapa kali salah kata sandi. Disimpan di database
+// (tabel GagalLogin) agar berlaku untuk semua proses/instance server.
 
-export function cekKunciLogin(kunci: string) {
-  const data = gagalLogin.get(kunci);
-  if (data && data.sampai > Date.now() && data.jumlah >= config.maksGagalLogin) {
+export async function cekKunciLogin(kunci: string) {
+  const data = await prisma.gagalLogin.findUnique({ where: { kunci } });
+  if (data && data.sampai > new Date() && data.jumlah >= config.maksGagalLogin) {
     throw galat(429, `Terlalu banyak percobaan gagal. Coba lagi dalam ${config.lamaKunciLoginMenit} menit.`);
   }
 }
 
-export function catatGagalLogin(kunci: string) {
-  const data = gagalLogin.get(kunci);
-  const masihBerlaku = data && data.sampai > Date.now();
-  gagalLogin.set(kunci, {
-    jumlah: masihBerlaku ? data.jumlah + 1 : 1,
-    sampai: Date.now() + config.lamaKunciLoginMenit * 60 * 1000,
-  });
+/** Tambah hitungan secara atomik; hitungan mulai dari 1 lagi bila masa kunci sebelumnya sudah lewat. */
+export async function catatGagalLogin(kunci: string) {
+  const sampai = new Date(Date.now() + config.lamaKunciLoginMenit * 60 * 1000);
+  await prisma.$executeRaw`
+    INSERT INTO "GagalLogin" ("kunci", "jumlah", "sampai") VALUES (${kunci}, 1, ${sampai})
+    ON CONFLICT ("kunci") DO UPDATE SET
+      "jumlah" = CASE WHEN "GagalLogin"."sampai" > NOW() THEN "GagalLogin"."jumlah" + 1 ELSE 1 END,
+      "sampai" = EXCLUDED."sampai"`;
 }
 
-export const hapusGagalLogin = (kunci: string) => gagalLogin.delete(kunci);
+export const hapusGagalLogin = (kunci: string) => prisma.gagalLogin.deleteMany({ where: { kunci } });
+
+/** Pembersihan berkala catatan yang masa kuncinya sudah lewat. */
+export const bersihkanGagalLogin = () => prisma.gagalLogin.deleteMany({ where: { sampai: { lt: new Date() } } });
 
 /** Dipakai tes agar penguncian dari satu tes tidak terbawa ke tes lain. */
-export const kosongkanGagalLogin = () => gagalLogin.clear();
+export const kosongkanGagalLogin = () => prisma.gagalLogin.deleteMany();
 
 /**
  * Batas data sekolah untuk staf: null = semua sekolah (admin instansi),
