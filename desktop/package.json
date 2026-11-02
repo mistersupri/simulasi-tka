@@ -9,7 +9,7 @@
     "konfigurasi": "node scripts/siapkan-konfigurasi.mjs",
     "start": "npm run konfigurasi && electron .",
     "build:win": "npm run konfigurasi && electron-builder --win nsis --x64 --publish never",
-    "build:linux-dir": "npm run konfigurasi && electron-builder --linux dir --publish never"
+    "build:linux": "npm run konfigurasi && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "build": {
     "appId": "id.sch.simulasitka.ujian",
@@ -39,14 +39,26 @@
     },
     "linux": {
       "target": [
-        "dir"
-      ]
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education",
+      "maintainer": "Simulasi TKA <admin@simulasi-tka.invalid>",
+      "synopsis": "Aplikasi ujian Simulasi TKA untuk komputer lab",
+      "artifactName": "Ujian-TKA-${version}-${arch}.${ext}"
     },
-    "publish": []
+    "publish": [],
+    "deb": {
+      "packageName": "ujian-tka"
+    }
   },
   "devDependencies": {
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0"
   },
-  "author": "Simulasi TKA"
+  "author": {
+    "name": "Simulasi TKA",
+    "email": "admin@simulasi-tka.invalid"
+  },
+  "homepage": "https://github.com/mistersupri/simulasi-tka"
 }

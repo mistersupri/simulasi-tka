@@ -1,0 +1,180 @@
+# Membangun aplikasi ujian desktop untuk Windows (.exe) dan Linux (.AppImage, .deb),
+# lalu menerbitkannya sebagai GitHub Release.
+#
+# Cara menjalankan:
+#   1. Dorong tag:        git tag desktop-v1.0.1 && git push origin desktop-v1.0.1
+#   2. Atau manual:       tab Actions > "Rilis aplikasi desktop" > Run workflow
+#
+# Pengaturan repositori (Settings > Secrets and variables > Actions):
+#   Variable TKA_SERVER_URL      alamat server ujian yang ditanam ke aplikasi (wajib bila tidak diisi saat Run workflow)
+#   Secret   TKA_KUNCI_APLIKASI  sama dengan KUNCI_APLIKASI di server (opsional)
+#   Secret   TKA_SANDI_DARURAT   kata sandi pengawas bila server mati (opsional)
+#
+# PENTING: rilis dibuat sebagai DRAFT (hanya terlihat oleh pemilik & kolaborator), karena
+# installer berisi alamat server dan kunci aplikasi yang bisa diekstrak siapa pun yang
+# mengunduhnya. Pilih "publik" hanya bila isi tersebut memang boleh diketahui umum.
+name: Rilis aplikasi desktop
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      versi:
+        description: 'Nomor versi, mis. 1.0.1'
+        required: true
+      server_url:
+        description: 'Alamat server ujian (kosong = pakai variable TKA_SERVER_URL)'
+        required: false
+      publik:
+        description: 'Terbitkan untuk umum (bukan draft)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rilis-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  siapkan:
+    name: Siapkan versi
+    runs-on: ubuntu-latest
+    outputs:
+      versi: ${{ steps.versi.outputs.versi }}
+      tag: ${{ steps.versi.outputs.tag }}
+    steps:
+      - id: versi
+        name: Tentukan versi & periksa pengaturan
+        env:
+          VERSI_INPUT: ${{ inputs.versi }}
+          SERVER_URL: ${{ inputs.server_url || vars.TKA_SERVER_URL }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSI="${GITHUB_REF_NAME#desktop-v}"
+          else
+            VERSI="${VERSI_INPUT#v}"
+          fi
+          if ! echo "$VERSI" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Versi \"$VERSI\" tidak valid. Gunakan format 1.2.3"
+            exit 1
+          fi
+          if [ -z "$SERVER_URL" ]; then
+            echo "::error::Alamat server kosong. Isi saat Run workflow atau buat variable repositori TKA_SERVER_URL."
+            exit 1
+          fi
+          echo "versi=$VERSI" >> "$GITHUB_OUTPUT"
+          echo "tag=desktop-v$VERSI" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.nama }}
+    needs: siapkan
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nama: Windows
+            os: windows-latest
+            skrip: build:win
+            berkas: |
+              desktop/dist/*.exe
+          - nama: Linux
+            os: ubuntu-latest
+            skrip: build:linux
+            berkas: |
+              desktop/dist/*.AppImage
+              desktop/dist/*.deb
+    defaults:
+      run:
+        working-directory: desktop
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Pasang dependensi
+        run: npm ci
+
+      - name: Setel versi aplikasi
+        run: npm version "${{ needs.siapkan.outputs.versi }}" --no-git-tag-version --allow-same-version
+
+      - name: Build installer
+        run: npm run ${{ matrix.skrip }}
+        env:
+          TKA_SERVER_URL: ${{ inputs.server_url || vars.TKA_SERVER_URL }}
+          TKA_KUNCI_APLIKASI: ${{ secrets.TKA_KUNCI_APLIKASI }}
+          TKA_SANDI_DARURAT: ${{ secrets.TKA_SANDI_DARURAT }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.nama }}
+          path: ${{ matrix.berkas }}
+          if-no-files-found: error
+          retention-days: 7
+
+  rilis:
+    name: Terbitkan rilis
+    needs: [siapkan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: berkas
+          pattern: installer-*
+          merge-multiple: true
+
+      - name: Hitung checksum
+        working-directory: berkas
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Buat atau perbarui rilis
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.siapkan.outputs.tag }}
+          VERSI: ${{ needs.siapkan.outputs.versi }}
+          PUBLIK: ${{ inputs.publik == true }}
+        run: |
+          cat > catatan.md <<CATATAN
+          Aplikasi ujian Simulasi TKA versi ${VERSI} untuk komputer lab.
+
+          | Berkas | Untuk |
+          |---|---|
+          | \`Ujian-TKA-Setup-${VERSI}.exe\` | Windows 10/11 64-bit (installer) |
+          | \`Ujian-TKA-${VERSI}-x86_64.AppImage\` | Linux 64-bit, tanpa instalasi (\`chmod +x\` lalu jalankan) |
+          | \`Ujian-TKA-${VERSI}-amd64.deb\` | Ubuntu/Debian: \`sudo apt install ./Ujian-TKA-${VERSI}-amd64.deb\` |
+
+          Alamat server sudah tertanam di aplikasi. Panduan pemasangan: \`desktop/README.md\`.
+          Periksa keaslian berkas dengan \`SHA256SUMS.txt\`.
+          CATATAN
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Rilis $TAG sudah ada: berkas diperbarui."
+            gh release upload "$TAG" berkas/* --clobber
+          else
+            DRAFT="--draft"
+            [ "$PUBLIK" = "true" ] && DRAFT=""
+            gh release create "$TAG" berkas/* $DRAFT \
+              --title "Aplikasi Ujian TKA ${VERSI}" \
+              --notes-file catatan.md \
+              --target "$GITHUB_SHA"
+          fi
+
+          {
+            echo "### Rilis ${TAG}"
+            [ "$PUBLIK" = "true" ] && echo "Diterbitkan untuk umum." || echo "Dibuat sebagai **draft**: buka halaman Releases untuk mengunduh atau menerbitkannya."
+            echo
+            echo '```'
+            cat berkas/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

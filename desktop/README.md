@@ -1,4 +1,4 @@
-# Aplikasi ujian Windows (Electron)
+# Aplikasi ujian desktop: Windows & Linux (Electron)
 
 Aplikasi "browser ujian" untuk komputer lab. Isinya halaman siswa dari server
 Simulasi TKA (folder `web/`) di jendela terkunci. **Alamat server tertanam di installer**,
@@ -31,11 +31,25 @@ jadi siswa tidak bisa membuka situs lain. Halaman guru/admin tetap dibuka lewat 
 
 Installer harus dibuat ulang setiap kali alamat server berubah.
 
-### Cara 1: GitHub Actions (tanpa menyiapkan komputer)
-1. Di repositori GitHub: **Settings > Secrets and variables > Actions**, tambahkan
-   `TKA_KUNCI_APLIKASI` (sama dengan `KUNCI_APLIKASI` server) dan `TKA_SANDI_DARURAT` (opsional).
-2. Tab **Actions > Installer Windows > Run workflow**, isi alamat server, misalnya `http://192.168.1.10:3000`.
-3. Setelah selesai, unduh `installer-ujian-tka` dari halaman hasil workflow.
+### Cara 1: rilis otomatis dengan GitHub Actions
+Workflow `.github/workflows/rilis-desktop.yml` membangun **Windows (.exe)** dan **Linux (.AppImage, .deb)**
+lalu membuat **GitHub Release** berisi ketiga berkas beserta `SHA256SUMS.txt`.
+
+1. Sekali saja, di **Settings > Secrets and variables > Actions**:
+   - tab *Variables*: `TKA_SERVER_URL`, misalnya `http://192.168.1.10:3000`;
+   - tab *Secrets* (opsional): `TKA_KUNCI_APLIKASI` (sama dengan `KUNCI_APLIKASI` server) dan `TKA_SANDI_DARURAT`.
+2. Jalankan salah satu:
+   - dorong tag: `git tag desktop-v1.0.1 && git push origin desktop-v1.0.1`;
+   - atau **Actions > Rilis aplikasi desktop > Run workflow**, isi versi (dan alamat server bila berbeda).
+3. Setelah sekitar 10 menit, buka halaman **Releases**.
+
+> **Rilis dibuat sebagai draft**, hanya terlihat oleh pemilik dan kolaborator repositori. Repositori ini
+> publik: rilis yang diterbitkan bisa diunduh siapa saja, dan alamat server, kunci aplikasi, serta hash
+> kata sandi darurat bisa diekstrak dari installer. Centang **publik** hanya bila itu tidak masalah,
+> atau pindahkan repositori menjadi privat.
+
+Workflow ini hanya bisa dijalankan manual dari branch utama (aturan GitHub untuk `workflow_dispatch`);
+dorongan tag bisa dari commit mana pun.
 
 ### Cara 2: di komputer Windows
 Butuh Node.js 22.
@@ -48,7 +62,14 @@ $env:TKA_SANDI_DARURAT="kata-sandi-darurat"                         # opsional
 npm run build:win
 ```
 Hasilnya ada di `dist\Ujian-TKA-Setup-1.0.0.exe` (sekitar 120 MB).
-Di Linux juga bisa, dengan Wine 32 & 64-bit terpasang.
+Installer Windows juga bisa dibuat di Linux, dengan Wine 32 & 64-bit terpasang.
+
+### Cara 3: di komputer Linux
+```bash
+cd desktop && npm ci
+TKA_SERVER_URL=http://192.168.1.10:3000 npm run build:linux
+```
+Hasilnya `dist/Ujian-TKA-1.0.0-x86_64.AppImage` (±125 MB) dan `dist/Ujian-TKA-1.0.0-amd64.deb` (±100 MB).
 
 ### Menyiapkan server
 Isi `KUNCI_APLIKASI` (minimal 16 karakter acak) di `.env` server, lalu jalankan ulang server.
@@ -73,7 +94,11 @@ Buat kunci acak misalnya dengan `openssl rand -hex 24`.
 - Bila server tanpa HTTPS, lalu lintas jaringan bisa disadap di LAN. Gunakan HTTPS bila memungkinkan.
 - Bila komputer tidak punya GPU yang didukung, deteksi wajah memakai WebGL perangkat lunak (lebih berat).
   Bila tetap gagal, indikator kamera menampilkan "Deteksi wajah gagal dimuat".
-- Hanya Windows 10/11 64-bit.
+- Windows 10/11 64-bit dan Linux 64-bit (x86_64).
+- **Di Linux, perlindungan tangkapan layar tidak ada** (fitur ini hanya ada di Windows dan macOS), dan
+  rekam layar di sesi Wayland bisa gagal; gunakan sesi X11 (Xorg). Mode kiosk bergantung pada
+  pengelola jendela, dan pintasan sistem (mis. tombol Super) bisa tetap aktif. Versi Linux baru diuji di Xvfb,
+  belum di desktop Ubuntu sungguhan.
 
 ## Status pengujian
 Diuji di Linux (Electron 45 di bawah Xvfb):
