@@ -3,13 +3,14 @@ import { prisma } from '../db.ts';
 import { kirimBerkas } from '../lib/berkas.ts';
 import { galat } from '../lib/galat.ts';
 import { ambilPengaturan } from '../lib/pengaturan.ts';
+import { VERSI_SERVER } from '../lib/versi.ts';
 import { siswaDariRequest, stafDariRequest } from '../lib/sesi.ts';
 
 export const rutPublik = Router();
 
 rutPublik.get('/info', async (_req, res) => {
   const p = await ambilPengaturan();
-  res.json({ namaInstansi: p.NAMA_SEKOLAH, tahunAjaran: p.TAHUN_AJARAN, pengumuman: p.PENGUMUMAN, adaLogo: !!p.LOGO });
+  res.json({ namaInstansi: p.NAMA_SEKOLAH, tahunAjaran: p.TAHUN_AJARAN, pengumuman: p.PENGUMUMAN, adaLogo: !!p.LOGO, versi: VERSI_SERVER });
 });
 
 /** Daftar sekolah aktif untuk form login siswa (hanya nama). */

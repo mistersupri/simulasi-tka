@@ -22,16 +22,21 @@ async function bukaSekali(polos = false, deviceId?: string): Promise<MediaStream
   }
 }
 
-/**
- * Membuka kamera depan 640x480; bila ditolak karena syaratnya, coba lagi dengan kamera apa saja.
- * Webcam di Windows sering gagal "Timeout starting video source" pada pembukaan pertama padahal
- * tidak dipakai aplikasi lain, jadi galat sementara dicoba ulang dua kali dengan jeda.
- */
-export async function bukaKamera(opsi: { polos?: boolean; deviceId?: string } = {}): Promise<MediaStream> {
+const KUNCI_KAMERA = 'tka_kamera';
+
+/** Kamera yang dipilih di layar persiapan, diingat per perangkat. */
+export function kameraPilihan(): string | null {
+  try { return localStorage.getItem(KUNCI_KAMERA); } catch { return null; }
+}
+export function simpanKameraPilihan(id: string) {
+  try { localStorage.setItem(KUNCI_KAMERA, id); } catch { /* tidak tersedia: kamera bawaan dipakai */ }
+}
+
+async function cobaUlang(buka: () => Promise<MediaStream>): Promise<MediaStream> {
   let galat: unknown;
   for (let i = 0; i <= JEDA_ULANG_MS.length; i++) {
     try {
-      return await bukaSekali(opsi.polos, opsi.deviceId);
+      return await buka();
     } catch (err) {
       galat = err;
       const nama = (err as { name?: string })?.name ?? '';
@@ -40,6 +45,24 @@ export async function bukaKamera(opsi: { polos?: boolean; deviceId?: string } = 
     }
   }
   throw galat;
+}
+
+/**
+ * Membuka kamera. Kamera yang dipilih di layar persiapan dicoba dulu; bila gagal, kembali ke kamera bawaan
+ * (depan 640x480, lalu kamera apa saja). Galat sementara seperti "Timeout starting video source" dicoba ulang.
+ */
+export async function bukaKamera(opsi: { polos?: boolean; deviceId?: string } = {}): Promise<MediaStream> {
+  if (!opsi.polos && !opsi.deviceId) {
+    const pilihan = kameraPilihan();
+    if (pilihan) {
+      try {
+        return await cobaUlang(() => bukaSekali(false, pilihan));
+      } catch {
+        // Kamera pilihan tidak ada atau gagal: pakai kamera bawaan.
+      }
+    }
+  }
+  return cobaUlang(() => bukaSekali(opsi.polos, opsi.deviceId));
 }
 
 /** Jeda pendek agar Windows sempat melepas kamera yang baru dimatikan sebelum dibuka lagi. */
@@ -66,6 +89,7 @@ export function videoHitam(video: HTMLVideoElement): boolean {
 }
 
 const KAMERA_INFRAMERAH = /\b(ir|infra\s?red|infrared|depth|inframerah)\b/i;
+export const kameraInframerah = (nama: string) => KAMERA_INFRAMERAH.test(nama);
 
 /**
  * Kamera lain yang bisa dicoba bila kamera bawaan gagal atau hitam. Laptop (mis. Lenovo) sering punya dua kamera:

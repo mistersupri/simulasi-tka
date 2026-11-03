@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { InputSandi } from '@/components/InputSandi';
 import { GantiSandi } from '@/components/GantiSandi';
+import { PersiapanAplikasi, sudahSiap, tandaSiap } from '@/components/PersiapanAplikasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { BilahKepala } from '@/components/Merek';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +26,10 @@ import { formatTanggal } from '@/lib/format';
 import type { PaketUjian, ProfilSiswa, Riwayat, StatusUjian, UjianSiswa } from '@/lib/tipe';
 
 export function HalamanBeranda() {
+  // Di aplikasi ujian, layar persiapan (koneksi, versi, kamera) tampil dulu sekali per menjalankan aplikasi.
+  const [siap, setSiap] = useState(() => !aplikasi || sudahSiap());
   const profil = useProfilSiswa();
+  if (!siap) return <PersiapanAplikasi onLanjut={() => { tandaSiap(); setSiap(true); }} />;
   if (profil.isPending) return <Memuat className="min-h-dvh" />;
   if (profil.error && !(profil.error instanceof ApiError && profil.error.status === 401)) {
     return <main className="mx-auto max-w-md px-4 py-20"><Galat galat={profil.error} ulangi={() => profil.refetch()} /></main>;

@@ -13,6 +13,9 @@ RUN npm run build && npm prune --omit=dev
 FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 UPLOAD_DIR=/data/uploads
+# Nomor versi rilis, diisi lewat build-arg dari GitHub Actions; ditampilkan ke aplikasi untuk dicocokkan.
+ARG VERSI=dev
+ENV APP_VERSION=$VERSI
 COPY --from=build /app /app
 RUN mkdir -p /data/uploads && chown -R node:node /data && chmod +x /app/docker-entrypoint.sh
 EXPOSE 3000

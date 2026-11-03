@@ -19,6 +19,11 @@ afterAll(async () => {
 describe('impor Excel lama & login', () => {
   beforeEach(kosongkanDb);
 
+  it('/info memuat nomor versi server (dipakai aplikasi untuk mencocokkan versi)', async () => {
+    const { body } = await request(app).get('/api/info').expect(200);
+    expect(body.versi).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
   it('mengimpor siswa (hash lama), soal pecahan sebagai teks, dan ujian latihan', async () => {
     const { siswa } = await siapkan();
     const s = await prisma.siswa.findFirstOrThrow({ where: { username: 'uji_tka' } });

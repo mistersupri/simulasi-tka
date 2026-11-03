@@ -168,6 +168,8 @@ jobs:
         with:
           context: web
           push: true
+          build-args: |
+            VERSI=${{ needs.siapkan.outputs.versi }}
           tags: |
             ${{ needs.siapkan.outputs.image }}:${{ needs.siapkan.outputs.versi }}
             ${{ needs.siapkan.outputs.image }}:latest
