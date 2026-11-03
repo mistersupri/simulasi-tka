@@ -3,7 +3,7 @@ import {
 } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { InputSandi } from '@/components/InputSandi';
 import { GantiSandi } from '@/components/GantiSandi';
 import { Galat, Memuat } from '@/components/Keadaan';
@@ -71,13 +71,16 @@ function LoginStaf() {
 function Kerangka({ profil }: { profil: ProfilStaf }) {
   const qc = useQueryClient();
   const lokasi = useLocation();
+  const navigate = useNavigate();
   const [menuTerbuka, setMenuTerbuka] = useState(false);
   const [gantiSandi, setGantiSandi] = useState(false);
   const keluar = useMutation({
     mutationFn: () => api.post('/auth/keluar', { jenis: 'staf' }),
     onSettled: () => {
-      qc.clear();
+      // Jangan pakai qc.clear(): itu melepas query profil yang sedang diamati sehingga layar tidak berganti ke login.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'profil' && q.queryKey[0] !== 'info' });
       qc.setQueryData(['profil', 'staf'], null);
+      navigate('/admin', { replace: true });
     },
   });
   const menu = MENU.filter((m) => m.peran.includes(profil.peran))

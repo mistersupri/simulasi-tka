@@ -77,15 +77,23 @@ function aturSesi() {
   }
 
   // Hanya kamera (tanpa mikrofon) dan hanya untuk server sekolah.
+  // Asal diambil dari beberapa sumber: Electron kadang mengirim asal kosong atau berbeda bentuk
+  // (mis. saat memeriksa izin), sehingga kamera ikut tertolak walau halamannya milik server sekolah.
+  const asalSah = (wc, ...kandidat) => [...kandidat, wc && !wc.isDestroyed() ? wc.getURL() : ''].some((a) => a && milikServer(a));
   ses.setPermissionRequestHandler((wc, izin, jawab, detail) => {
-    const asal = detail.requestingUrl || wc.getURL();
+    const sah = asalSah(wc, detail.requestingUrl, detail.securityOrigin);
+    let diizinkan = false;
     if (izin === 'media') {
       const jenis = detail.mediaTypes || [];
-      return jawab(milikServer(asal) && jenis.length > 0 && jenis.every((t) => t === 'video'));
+      diizinkan = sah && jenis.length > 0 && jenis.every((t) => t === 'video');
+    } else {
+      diizinkan = izin === 'fullscreen' && sah;
     }
-    jawab(izin === 'fullscreen' && milikServer(asal));
+    if (izin === 'media') console.log(`[izin] media ${JSON.stringify(detail.mediaTypes)} dari ${detail.requestingUrl} -> ${diizinkan ? 'diizinkan' : 'ditolak'}`);
+    jawab(diizinkan);
   });
-  ses.setPermissionCheckHandler((_wc, izin, asal) => (izin === 'media' || izin === 'fullscreen') && milikServer(asal));
+  ses.setPermissionCheckHandler((wc, izin, asal, detail) =>
+    (izin === 'media' || izin === 'fullscreen') && asalSah(wc, asal, detail?.requestingUrl, detail?.securityOrigin));
 }
 
 function bukaServer(url = urlTerakhir) {

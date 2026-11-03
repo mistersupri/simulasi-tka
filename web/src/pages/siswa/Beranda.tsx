@@ -136,8 +136,8 @@ function Beranda({ profil }: { profil: ProfilSiswa }) {
   const keluar = useMutation({
     mutationFn: () => api.post('/auth/keluar', { jenis: 'siswa' }),
     onSettled: () => {
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'profil' && q.queryKey[0] !== 'info' });
       qc.setQueryData(['profil', 'siswa'], null);
-      qc.removeQueries({ queryKey: ['beranda'] });
     },
   });
 
