@@ -83,21 +83,34 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
     setTes('idle');
   }
 
-  /** Menyalakan kamera yang dipilih selama dua detik untuk memastikan gambarnya tidak hitam. */
+  /** Menyalakan kamera yang dipilih selama dua detik untuk memastikan gambarnya tidak hitam. Dibatasi 12 detik. */
   async function tesKamera() {
     setTes('memuat');
+    setPesanKamera('');
+    let batal = false;
+    let timer: number | undefined;
     let s: MediaStream | null = null;
+    const buka = bukaKamera({ deviceId: pilih }).then((st) => {
+      if (batal) st.getTracks().forEach((t) => t.stop());
+      return st;
+    });
+    const waktu = new Promise<never>((_, tolak) => {
+      timer = window.setTimeout(() => tolak(new Error('Kamera tidak merespons dalam 12 detik.')), 12000);
+    });
     try {
-      s = await bukaKamera({ deviceId: pilih });
+      s = await Promise.race([buka, waktu]);
       const v = videoRef.current;
       if (!v) throw new Error('Pratinjau tidak tersedia.');
       v.srcObject = s;
       await v.play().catch(() => {});
       await jedaKamera(2000);
       setTes(videoHitam(v) ? 'hitam' : 'ok');
-    } catch {
+    } catch (err) {
+      batal = true;
       setTes('gagal');
+      setPesanKamera(err instanceof Error && err.message.includes('12 detik') ? err.message : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
     } finally {
+      window.clearTimeout(timer);
       s?.getTracks().forEach((t) => t.stop());
       if (videoRef.current) videoRef.current.srcObject = null;
     }
@@ -169,7 +182,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
                 </Button>
                 {tes === 'ok' && <span className="text-sm font-semibold text-hijau">Gambar terlihat.</span>}
                 {tes === 'hitam' && <span className="text-sm font-semibold text-merah">Gambar hitam. Pilih kamera lain, atau periksa penutup lensa webcam.</span>}
-                {tes === 'gagal' && <span className="text-sm font-semibold text-merah">Kamera ini tidak bisa dibuka. Pilih kamera lain.</span>}
+                {tes === 'gagal' && <span className="text-sm font-semibold text-merah">{pesanKamera || 'Kamera ini tidak bisa dibuka. Pilih kamera lain.'}</span>}
               </div>
               <video
                 ref={videoRef}
