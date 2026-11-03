@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera, type PenjelasanKamera } from '@/lib/kamera';
-import { bukaKamera, jedaKamera, videoHitam } from '@/lib/kameraPerangkat';
+import { bukaKamera, daftarKamera, jedaKamera, videoHitam } from '@/lib/kameraPerangkat';
 import type { JenisPelanggaran } from '@/lib/tipe';
 
 export type Lapor = (jenis: JenisPelanggaran, detail?: string, foto?: Blob | null) => void;
@@ -236,29 +236,56 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
         return true;
       };
 
+      // Coba kamera bawaan dulu; bila gagal atau hitam, coba kamera lain (mis. kamera warna di samping kamera inframerah).
       let video: HTMLVideoElement | null = null;
-      try {
-        stream = await bukaKamera();
-        video = await tampilkan(stream);
-        if (video && (await hitamTerus(video))) {
-          // Coba sekali lagi tanpa syarat resolusi/arah kamera: sebagian driver mengirim bingkai kosong bila diminta 640x480.
-          stream.getTracks().forEach((t) => t.stop());
-          await jedaKamera(1000);
-          if (berhenti) return;
-          stream = await bukaKamera({ polos: true });
+      const kandidat: (string | undefined)[] = [undefined];
+      const namaDicoba: string[] = [];
+      let diperluas = false;
+      let galatPertama: Error | null = null;
+      let pernahHitam = false;
+      let berhasil = false;
+      for (let i = 0; i < kandidat.length && !berhasil; i++) {
+        try {
+          stream = await bukaKamera({ deviceId: kandidat[i] });
+          if (!diperluas) {
+            diperluas = true;
+            const label = stream.getVideoTracks()[0]?.label ?? '';
+            namaDicoba.push(label || 'kamera bawaan');
+            kandidat.push(...(await daftarKamera(stream.getVideoTracks()[0]?.getSettings().deviceId)).map((d) => d.id));
+          }
           video = await tampilkan(stream);
           if (video && (await hitamTerus(video))) {
-            await gagalKamera(null, {
-              jenis: 'hitam', judul: 'Gambar kamera hitam',
-              isi: 'Kamera menyala tetapi tidak mengirim gambar. Buka penutup lensa atau tombol privasi webcam, pastikan tidak ada aplikasi lain yang memakai kamera, '
-                + 'lalu coba lagi. Bila tetap hitam, cabut dan colok ulang webcam atau mulai ulang komputer.',
-              detail: 'Gambar kamera hitam (kamera menyala tanpa gambar)',
-            });
-            return;
+            pernahHitam = true;
+            stream.getTracks().forEach((t) => t.stop());
+            stream = null;
+            await jedaKamera(800);
+            continue;
           }
+          berhasil = true;
+        } catch (err) {
+          galatPertama ??= err as Error;
+          stream?.getTracks().forEach((t) => t.stop());
+          stream = null;
+          if (berhenti) return;
+          if (!diperluas) {
+            diperluas = true;
+            kandidat.push(...(await daftarKamera()).map((d) => d.id));
+          }
+          await jedaKamera(800);
         }
-      } catch (err) {
-        await gagalKamera(err as Error);
+      }
+      if (berhenti) return;
+      if (!berhasil) {
+        if (pernahHitam) {
+          await gagalKamera(null, {
+            jenis: 'hitam', judul: 'Gambar kamera hitam',
+            isi: 'Kamera menyala tetapi tidak mengirim gambar. Buka penutup lensa atau tombol privasi webcam (laptop Lenovo: tombol F8 atau kunci privasi di bingkai layar), '
+              + 'pastikan tidak ada aplikasi lain yang memakai kamera, lalu coba lagi. Bila tetap hitam, cabut dan colok ulang webcam atau mulai ulang komputer.',
+            detail: `Gambar kamera hitam pada ${kandidat.length} kamera yang dicoba${namaDicoba.length ? ` (${namaDicoba.join(', ')})` : ''}${galatPertama ? `; galat: ${galatPertama.name}` : ''}`.slice(0, 280),
+          });
+        } else {
+          await gagalKamera(galatPertama);
+        }
         return;
       }
       if (berhenti || !stream || !video) return;

@@ -20,7 +20,7 @@ import { rekamLayarDidukung } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera } from '@/lib/kamera';
-import { bukaKamera } from '@/lib/kameraPerangkat';
+import { bukaKamera, daftarKamera } from '@/lib/kameraPerangkat';
 import { formatTanggal } from '@/lib/format';
 import type { PaketUjian, ProfilSiswa, Riwayat, StatusUjian, UjianSiswa } from '@/lib/tipe';
 
@@ -283,8 +283,22 @@ function DialogMulai({ ujian, tutup }: { ujian: UjianSiswa | null; tutup: () => 
       // Kamera dicek SEBELUM ujian dimulai: bila bermasalah, waktu ujian belum berjalan dan penyebabnya jelas.
       if (u.wajibKamera) {
         try {
-          const tes = await bukaKamera();
-          tes.getTracks().forEach((t) => t.stop());
+          // Lolos bila salah satu kamera bisa dibuka (kamera bawaan bisa saja kamera inframerah yang gagal).
+          let galatKamera: unknown;
+          let terbuka = false;
+          const id: (string | undefined)[] = [undefined];
+          for (let i = 0; i < id.length && !terbuka; i++) {
+            try {
+              const tes = await bukaKamera({ deviceId: id[i] });
+              if (i === 0) id.push(...(await daftarKamera(tes.getVideoTracks()[0]?.getSettings().deviceId)).map((d) => d.id));
+              tes.getTracks().forEach((t) => t.stop());
+              terbuka = true;
+            } catch (e) {
+              galatKamera ??= e;
+              if (i === 0) id.push(...(await daftarKamera()).map((d) => d.id));
+            }
+          }
+          if (!terbuka) throw galatKamera;
         } catch (err) {
           keluarLayarPenuh();
           const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
