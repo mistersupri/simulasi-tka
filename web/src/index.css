@@ -155,10 +155,11 @@ math-field.rumus-editor:focus-within { border-color: var(--biru); outline: none;
 .rumus-terpilih math-field.rumus-editor { border-color: var(--biru); }
 math-field.rumus-blok { font-size: 1.4rem; }
 math-field.rumus-editor::part(menu-toggle) { display: none; }
-math-field.rumus-editor::part(virtual-keyboard-toggle) { color: var(--biru); }
-/* Keyboard layar MathLive dipasang di luar dialog; dialog modal mematikan pointer-events di luar isinya. */
-.ML__keyboard, math-virtual-keyboard, .MLK__backdrop, .ML__popover, .ui-menu-container { pointer-events: auto !important; }
-.ML__keyboard { --keyboard-zindex: 100; }
+/* Keyboard layar hanya satu per kotak isian (tombol di kotaknya), bukan di tiap rumus. */
+math-field.rumus-editor::part(virtual-keyboard-toggle) { display: none; }
+.editor-ringkas .editor-isi { padding-right: 2.75rem; }
+/* Menu dan saran perintah MathLive dipasang di luar dialog; dialog modal mematikan pointer-events di luar isinya. */
+.ML__popover, .ui-menu-container { pointer-events: auto !important; }
 
 /* Rumus KaTeX sedikit lebih kecil dari bawaannya agar sebaris dengan teks soal. */
 .katex { font-size: 1.1em; }

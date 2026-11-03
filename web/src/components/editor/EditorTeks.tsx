@@ -9,6 +9,9 @@ import { atributLang } from '@/lib/bahasa';
 import { adaRumusBelumLengkap, dariDokumen, keDokumen, type Dok } from '@/lib/dokumenTeks';
 import { adaMarkup } from '@/lib/teksKaya';
 import { cn } from '@/lib/utils';
+import { adapterEditor } from '@/components/papan/adapter';
+import { usePapan } from '@/components/papan/PapanKetik';
+import { TombolPapan } from '@/components/papan/PapanKetikLayar';
 import { mintaFokusRumus } from './mathlive';
 import { RumusBlok, RumusSebaris } from './rumus';
 
@@ -114,6 +117,7 @@ function Alat({ editor, ringkas }: { editor: Editor; ringkas: boolean }) {
           )}
         </>
       )}
+      {!ringkas && <TombolPapan className="ml-auto" />}
     </div>
   );
 }
@@ -124,7 +128,9 @@ function Alat({ editor, ringkas }: { editor: Editor; ringkas: boolean }) {
  */
 export function EditorTeks({ label, value, onChange, bahasa, ringkas = false, placeholder, petunjuk, labelTersembunyi, tinggiMin, className }: Props) {
   const terakhir = useRef(value);
+  const pembungkus = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor | null>(null);
+  const daftarkanPapan = usePapan()?.daftarkan;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [lengkap, setLengkap] = useState(() => !adaRumusBelumLengkap(keDokumen(value)));
@@ -154,6 +160,12 @@ export function EditorTeks({ label, value, onChange, bahasa, ringkas = false, pl
 
   editorRef.current = editor;
 
+  // Papan ketik layar menyisipkan ke editor ini bila editor (bukan kotak rumus di dalamnya) yang sedang fokus.
+  useEffect(() => {
+    if (!editor || !daftarkanPapan || !pembungkus.current) return;
+    return daftarkanPapan(pembungkus.current, adapterEditor(editor));
+  }, [editor, daftarkanPapan]);
+
   // Perubahan dari luar (mis. form dimuat ulang) masuk ke editor; ketikan sendiri tidak dimuat ulang.
   useEffect(() => {
     if (editor && value !== terakhir.current) {
@@ -167,12 +179,18 @@ export function EditorTeks({ label, value, onChange, bahasa, ringkas = false, pl
     <div className={cn('space-y-1.5', className)}>
       <span className={cn('block text-sm font-semibold', labelTersembunyi && 'sr-only')}>{label}</span>
       <div
+        ref={pembungkus}
         lang={atributLang(bahasa)}
-        className="editor-teks group/editor relative rounded-md border border-input bg-white focus-within:border-biru focus-within:outline-2 focus-within:outline-biru"
+        className={cn(
+          'editor-teks group/editor relative rounded-md border border-input bg-white focus-within:border-biru focus-within:outline-2 focus-within:outline-biru',
+          ringkas && 'editor-ringkas',
+        )}
         style={{ ['--tinggi-min' as string]: `${tinggiMin ?? (ringkas ? 2.5 : 8)}rem` }}
       >
         {editor && <Alat editor={editor} ringkas={ringkas} />}
         <EditorContent editor={editor} />
+        {/* Pilihan jawaban: tombol keyboard tetap terlihat di ujung kanan kotak (satu per kotak). */}
+        {ringkas && <TombolPapan className="absolute top-1 right-1 z-10" />}
       </div>
       {petunjuk && <p className="text-xs text-muted-foreground">{petunjuk}</p>}
       {!lengkap && (

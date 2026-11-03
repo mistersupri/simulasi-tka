@@ -1,19 +1,21 @@
-import { ImageSquare, Translate, Trash, UploadSimple } from '@phosphor-icons/react';
+import { ImageSquare, Trash, UploadSimple } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { GambarSoal } from '@/components/GambarSoal';
 import { diPerangkatMathLive } from '@/components/editor/mathlive';
 import { EditorTeks } from '@/components/editor/EditorTeks';
+import { PapanKetikProvider } from '@/components/papan/PapanKetik';
+import { PapanKetikLayar } from '@/components/papan/PapanKetikLayar';
+import { TextareaPapan } from '@/components/papan/TextareaPapan';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { api, pesanGalat, urlGambar } from '@/lib/api';
-import { atributLang, DAFTAR_BAHASA, labelBahasa } from '@/lib/bahasa';
+import { atributLang } from '@/lib/bahasa';
 import { perkecilGambar } from '@/lib/gambar';
 import type { Soal, TipeSoal } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
@@ -57,11 +59,8 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
   }));
   const [galat, setGalat] = useState('');
   const [mengunggah, setMengunggah] = useState(false);
-  // Keyboard layar MathLive dipasang di luar dialog; tutup bersama formulir.
-  useEffect(() => () => { window.mathVirtualKeyboard?.hide(); }, []);
   const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
   const isian = d.tipe === 'ISIAN';
-  const infoBahasa = DAFTAR_BAHASA.find((b) => b.kode === d.bahasa);
 
   const simpan = useMutation({
     mutationFn: () => {
@@ -100,7 +99,7 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
 
   return (
     <Dialog open onOpenChange={(b) => !b && tutup()}>
-      {/* Keyboard layar dan menu MathLive dipasang di luar dialog; mengkliknya tidak boleh menutup dialog. */}
+      {/* Menu MathLive dipasang di luar dialog; mengkliknya tidak boleh menutup dialog. */}
       <DialogContent
         lebar
         // Formulir soal panjang: klik di luar tidak menutupnya (isian tidak hilang tanpa sengaja). Tutup lewat X atau Batal.
@@ -110,6 +109,8 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
         // Escape di dalam editor hanya keluar dari rumus/menutup keyboard layar, bukan menutup dialog.
         onEscapeKeyDown={(e) => { if (e.target instanceof Element && (e.target.closest('.editor-teks') || diPerangkatMathLive(e.target))) e.preventDefault(); }}
       >
+        {/* Bahasa soal diatur dari papan ketik layar: memilih papan bahasa (mis. Arab) mengatur bahasa soal. */}
+        <PapanKetikProvider bahasa={d.bahasa} onBahasa={(k) => ubah('bahasa', k)}>
         <form onSubmit={(e) => { e.preventDefault(); setGalat(''); simpan.mutate(); }} className="flex min-h-0 flex-col">
           <DialogHeader><DialogTitle>{soal ? `Ubah soal ${soal.id}` : 'Tambah soal'}</DialogTitle></DialogHeader>
           <DialogBody className="space-y-5">
@@ -135,27 +136,10 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
             </div>
             <p className="-mt-3 text-xs text-muted-foreground">{KETERANGAN_TIPE[d.tipe]}</p>
 
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,320px)_1fr] sm:items-end">
-              <div className="space-y-1.5">
-                <Label htmlFor="s-bahasa"><Translate className="mr-1 inline size-4" />Bahasa soal</Label>
-                <Select value={d.bahasa} onValueChange={(v) => ubah('bahasa', v)}>
-                  <SelectTrigger id="s-bahasa" aria-label="Bahasa soal"><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {DAFTAR_BAHASA.map((b) => <SelectItem key={b.kode} value={b.kode}>{labelBahasa(b)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Menentukan font yang dipakai. Arah tulisan kanan-ke-kiri (Arab, Ibrani, Persia, Urdu) dikenali otomatis dari hurufnya,
-                sehingga soal berbahasa Indonesia dengan pilihan berhuruf Arab juga tampil benar. Ketik dengan keyboard bahasa itu
-                {infoBahasa?.aksara ? ` (${infoBahasa.aksara})` : ''}.
-              </p>
-            </div>
-
             <EditorTeks
               label="Pertanyaan" value={d.pertanyaan} onChange={(v) => ubah('pertanyaan', v)} bahasa={d.bahasa}
               placeholder="Ketik pertanyaan. Klik Rumus untuk menulis rumus matematika, atau Kode untuk soal pemrograman."
-              petunjuk="Rumus dibuat langsung seperti menulis di kertas (pecahan, akar, pangkat); keyboard layar ada di dalam kotak rumus. Boleh dikosongkan bila soal berupa gambar."
+              petunjuk="Rumus dibuat langsung seperti menulis di kertas (pecahan, akar, pangkat). Ikon keyboard di kotak ini membuka papan ketik layar untuk formula dan bahasa asing (Arab, Mandarin, Rusia, dan lainnya). Boleh dikosongkan bila soal berupa gambar."
             />
 
             <div className="space-y-1.5">
@@ -176,7 +160,7 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
                 <legend className="px-1 text-sm font-semibold">Jawaban yang diterima</legend>
                 <div className="space-y-1.5">
                   <Label htmlFor="s-isian">Satu jawaban benar per baris</Label>
-                  <Textarea
+                  <TextareaPapan
                     id="s-isian" rows={3} value={d.kunciIsian} required onChange={(e) => ubah('kunciIsian', e.target.value)}
                     lang={atributLang(d.bahasa)} dir="auto" className={cn(d.kode && 'font-mono')} spellCheck={false}
                     placeholder={'14\nempat belas'}
@@ -259,11 +243,13 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
             <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => ubah('aktif', v)} /> Soal aktif (bisa muncul di ujian)</Label>
             {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
           </DialogBody>
+          <PapanKetikLayar />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={tutup}>Batal</Button>
             <Button type="submit" disabled={simpan.isPending || mengunggah}>{simpan.isPending ? 'Menyimpan...' : 'Simpan soal'}</Button>
           </DialogFooter>
         </form>
+        </PapanKetikProvider>
       </DialogContent>
     </Dialog>
   );

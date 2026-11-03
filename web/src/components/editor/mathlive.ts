@@ -26,6 +26,6 @@ export const ambilFokusRumus = () => {
   return v;
 };
 
-/** Elemen milik MathLive yang dipasang di luar dialog (keyboard layar, menu, saran perintah). */
+/** Elemen milik MathLive yang dipasang di luar dialog (menu dan saran perintah). Keyboard layar memakai papan ketik sendiri (components/papan). */
 export const diPerangkatMathLive = (target: EventTarget | null) =>
-  target instanceof Element && !!target.closest('.ML__keyboard, .MLK__backdrop, .ML__popover, .ui-menu-container, math-virtual-keyboard, [class*="MLK__"]');
+  target instanceof Element && !!target.closest('.ML__popover, .ui-menu-container, .ML__keyboard, math-virtual-keyboard');

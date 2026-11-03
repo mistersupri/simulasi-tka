@@ -4,6 +4,8 @@ import { X } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 import type { MathfieldElement } from 'mathlive';
 import { cn } from '@/lib/utils';
+import { adapterRumus } from '@/components/papan/adapter';
+import { usePapan } from '@/components/papan/PapanKetik';
 import { ambilFokusRumus, muatMathLive } from './mathlive';
 
 /**
@@ -16,15 +18,17 @@ function TampilanRumus({ node, updateAttributes, editor, getPos, deleteNode, sel
   const medan = useRef<MathfieldElement | null>(null);
   const latexTerakhir = useRef(String(node.attrs.latex ?? ''));
   const [gagal, setGagal] = useState(false);
+  const daftarkanRef = useRef(usePapan()?.daftarkan);
 
   useEffect(() => {
     let batal = false;
     let el: MathfieldElement | null = null;
+    let lepasPapan: (() => void) | undefined;
     muatMathLive()
       .then(({ MathfieldElement }) => {
         if (batal || !tempat.current) return;
         el = new MathfieldElement();
-        el.mathVirtualKeyboardPolicy = 'manual'; // tombol keyboard tampil di dalam kotak rumus
+        el.mathVirtualKeyboardPolicy = 'manual'; // keyboard bawaan MathLive tidak dipakai; ada papan ketik layar sendiri
         el.className = cn('rumus-editor', blok && 'rumus-blok');
         el.setAttribute('aria-label', blok ? 'Rumus satu baris' : 'Rumus');
         el.value = latexTerakhir.current;
@@ -44,12 +48,13 @@ function TampilanRumus({ node, updateAttributes, editor, getPos, deleteNode, sel
         });
         el.addEventListener('keydown', (e) => {
           if (e.key !== 'Escape') return;
-          window.mathVirtualKeyboard?.hide();
           const pos = getPos();
           if (typeof pos === 'number') editor.chain().focus().setTextSelection(pos + node.nodeSize).run();
         });
         tempat.current.appendChild(el);
         medan.current = el;
+        // Papan ketik layar menyisipkan karakter ke kotak rumus yang sedang aktif.
+        lepasPapan = daftarkanRef.current?.(el, adapterRumus(el));
         if (ambilFokusRumus()) {
           requestAnimationFrame(() => {
             el?.focus();
@@ -64,6 +69,7 @@ function TampilanRumus({ node, updateAttributes, editor, getPos, deleteNode, sel
       .catch(() => setGagal(true));
     return () => {
       batal = true;
+      lepasPapan?.();
       el?.remove();
       medan.current = null;
     };
