@@ -86,10 +86,17 @@ export function useLayarPenuh(aktif: boolean, lapor: Lapor) {
 // Anti salin/blok & pindah tab
 // ------------------------------------------------------------------
 
+/** Kotak jawaban isian (lihat KotakIsian di pages/siswa/Ujian.tsx): tempat siswa mengetik. */
+const diKotakIsian = (t: EventTarget | null) => t instanceof Node && !!(t instanceof Element ? t : t.parentElement)?.closest('[data-isian]');
+
 function pintasanTerlarang(e: KeyboardEvent) {
   const k = e.key.toLowerCase();
   if (k === 'f12' || k === 'printscreen') return true;
+  // AltGr (Ctrl+Alt di Windows) dipakai keyboard Eropa untuk mengetik huruf; bukan pintasan.
+  if (e.getModifierState?.('AltGraph')) return false;
   const ctrl = e.ctrlKey || e.metaKey;
+  // Memilih/membatalkan di dalam kotak jawaban tidak menyentuh teks soal.
+  if (ctrl && !e.shiftKey && ['a', 'z', 'y'].includes(k) && diKotakIsian(e.target)) return false;
   if (ctrl && e.shiftKey && ['i', 'j', 'c', 's'].includes(k)) return true; // alat pengembang, tangkapan layar
   return ctrl && ['c', 'x', 'v', 'a', 'p', 's', 'u', 'f'].includes(k);
 }
@@ -102,7 +109,10 @@ export function useAntiContek(aktif: boolean, lapor: Lapor) {
       lapor('SALIN_TEMPEL', e.type);
     };
     const tolakDiam = (e: Event) => e.preventDefault();
+    // Memilih teks di kotak jawaban dibiarkan (kursor dan penyuntingan ketikan sendiri).
+    const tolakPilih = (e: Event) => { if (!diKotakIsian(e.target)) e.preventDefault(); };
     const tombol = (e: KeyboardEvent) => {
+      if (e.isComposing) return; // sedang menyusun huruf lewat IME (Mandarin, Jepang, Korea): bukan pintasan
       if (!pintasanTerlarang(e)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -121,7 +131,7 @@ export function useAntiContek(aktif: boolean, lapor: Lapor) {
     document.addEventListener('cut', tolakSalin);
     document.addEventListener('paste', tolakSalin);
     document.addEventListener('contextmenu', tolakDiam);
-    document.addEventListener('selectstart', tolakDiam);
+    document.addEventListener('selectstart', tolakPilih);
     document.addEventListener('dragstart', tolakDiam);
     document.addEventListener('keydown', tombol, true);
     document.addEventListener('keyup', tombolLepas, true);
@@ -132,7 +142,7 @@ export function useAntiContek(aktif: boolean, lapor: Lapor) {
       document.removeEventListener('cut', tolakSalin);
       document.removeEventListener('paste', tolakSalin);
       document.removeEventListener('contextmenu', tolakDiam);
-      document.removeEventListener('selectstart', tolakDiam);
+      document.removeEventListener('selectstart', tolakPilih);
       document.removeEventListener('dragstart', tolakDiam);
       document.removeEventListener('keydown', tombol, true);
       document.removeEventListener('keyup', tombolLepas, true);

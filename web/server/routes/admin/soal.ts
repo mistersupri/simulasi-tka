@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../db.ts';
-import { hapusBerkas, simpanGambar, unggah } from '../../lib/berkas.ts';
+import { hapusBerkas, simpanGambar, unggah, unggahImpor } from '../../lib/berkas.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
-import { awalanSoalSekolah, dataSoal, idSoalBerikutnya } from '../../lib/soal.ts';
+import { bacaBerkasImpor, buatTemplateSoal, imporSoal, type BarisImpor } from '../../lib/imporSoal.ts';
+import { dataSoal, tentukanIdSoal } from '../../lib/soal.ts';
 import { butuhStaf, sekolahStaf, type Staf } from '../../lib/sesi.ts';
-import { teks } from '../../lib/util.ts';
 
 /**
  * Bank soal.
@@ -42,9 +42,11 @@ rutAdminSoal.post('/gambar', unggah.single('gambar'), async (req, res) => {
 
 const skemaSoal = z.object({
   id: z.string().trim().toUpperCase().default(''),
-  mataPelajaran: z.string(), kelas: z.string(), pertanyaan: z.string(),
-  opsi: z.array(z.string()), kunci: z.union([z.string(), z.array(z.string())]),
-  skor: z.union([z.number(), z.string()]).default(1), tipe: z.enum(['PG', 'PGK']).default('PG'),
+  mataPelajaran: z.string(), kelas: z.string(), pertanyaan: z.string().default(''),
+  opsi: z.array(z.string()).default([]), opsiGambar: z.array(z.string()).default([]),
+  kunci: z.union([z.string(), z.array(z.string())]),
+  skor: z.union([z.number(), z.string()]).default(1), tipe: z.enum(['PG', 'PGK', 'ISIAN']).default('PG'),
+  bahasa: z.string().default('id'), pekaHuruf: z.boolean().default(false), kode: z.boolean().default(false),
   pembahasan: z.string().default(''), aktif: z.boolean().default(true),
   gambar: z.string().nullable().default(null),
   sekolahId: z.string().nullish(), // hanya dipakai admin; operator selalu sekolahnya
@@ -54,19 +56,13 @@ async function pastikanSekolahAda(id: string | null) {
   if (id && !(await prisma.sekolah.findUnique({ where: { id }, select: { id: true } }))) throw galat(400, 'Sekolah tidak ditemukan.');
 }
 
-/** ID sah dengan awalan sekolah (ditambahkan otomatis bila belum ada). */
-async function idSoal(diminta: string, mapel: string, sekolahId: string | null, dipakai?: Set<string>) {
-  const awalan = await awalanSoalSekolah(sekolahId);
-  if (!diminta) return idSoalBerikutnya(mapel, dipakai, awalan);
-  const id = diminta.startsWith(awalan) ? diminta : awalan + diminta;
-  if (!/^[A-Z0-9_-]{2,30}$/.test(id)) throw galat(400, 'ID soal hanya boleh huruf, angka, _ atau -, maksimal 30 karakter.');
-  return id;
-}
+/** Semua gambar yang dirujuk satu soal: gambar soal dan gambar pilihan. */
+const gambarSoal = (s: { gambar: string | null; opsiGambar: string[] }) => [s.gambar, ...s.opsiGambar].filter((n): n is string => !!n);
 
-/** Gambar lama dibuang dari disk bila tidak dipakai soal lain. */
-async function buangGambarTakTerpakai(nama: (string | null)[]) {
-  for (const n of nama) {
-    if (n && !(await prisma.soal.count({ where: { gambar: n } }))) await hapusBerkas('gambar', n);
+/** Gambar lama dibuang dari disk bila tidak dipakai soal lain (sebagai gambar soal maupun gambar pilihan). */
+async function buangGambarTakTerpakai(nama: string[]) {
+  for (const n of new Set(nama)) {
+    if (!(await prisma.soal.count({ where: { OR: [{ gambar: n }, { opsiGambar: { has: n } }] } }))) await hapusBerkas('gambar', n);
   }
 }
 
@@ -75,9 +71,9 @@ rutAdminSoal.post('/', async (req, res) => {
   const data = dataSoal(d);
   const sekolahId = pemilik(req.staf!, d.sekolahId);
   await pastikanSekolahAda(sekolahId);
-  const id = await idSoal(d.id, data.mataPelajaran, sekolahId);
+  const id = await tentukanIdSoal(d.id, data.mataPelajaran, sekolahId);
   if (await prisma.soal.findUnique({ where: { id } })) throw galat(400, `ID soal ${id} sudah dipakai.`);
-  await prisma.soal.create({ data: { ...data, id, gambar: d.gambar, sekolahId } });
+  await prisma.soal.create({ data: { ...data, id, sekolahId } });
   await catatLog(req.staf!, 'TAMBAH_SOAL', id);
   res.json({ pesan: `Soal ${id} ditambahkan.`, id });
 });
@@ -86,8 +82,9 @@ rutAdminSoal.put('/:id', async (req, res) => {
   const d = skemaSoal.parse(req.body);
   const lama = await prisma.soal.findFirst({ where: { id: String(req.params.id), ...milikStaf(req.staf!) } });
   if (!lama) throw galat(404, 'Soal tidak ditemukan.');
-  await prisma.soal.update({ where: { id: lama.id }, data: { ...dataSoal(d), gambar: d.gambar } });
-  if (lama.gambar !== d.gambar) await buangGambarTakTerpakai([lama.gambar]);
+  const data = dataSoal(d);
+  await prisma.soal.update({ where: { id: lama.id }, data });
+  await buangGambarTakTerpakai(gambarSoal(lama).filter((n) => !gambarSoal(data).includes(n)));
   await catatLog(req.staf!, 'UBAH_SOAL', lama.id);
   res.json({ pesan: `Soal ${lama.id} diperbarui.`, id: lama.id });
 });
@@ -97,7 +94,7 @@ const skemaIds = z.object({ ids: z.array(z.string()).min(1, 'Pilih minimal satu 
 rutAdminSoal.post('/hapus', async (req, res) => {
   const { ids } = skemaIds.parse(req.body);
   const where = { id: { in: ids }, ...milikStaf(req.staf!) };
-  const gambar = (await prisma.soal.findMany({ where, select: { gambar: true } })).map((s) => s.gambar);
+  const gambar = (await prisma.soal.findMany({ where, select: { gambar: true, opsiGambar: true } })).flatMap(gambarSoal);
   const r = await prisma.soal.deleteMany({ where });
   await buangGambarTakTerpakai(gambar);
   await catatLog(req.staf!, 'HAPUS_SOAL', ids.join(', '));
@@ -111,35 +108,45 @@ rutAdminSoal.post('/status', async (req, res) => {
   res.json({ pesan: `${r.count} soal ${aktif ? 'diaktifkan' : 'dinonaktifkan'}.` });
 });
 
-/** Impor dari tabel yang ditempel (Excel/Sheets/CSV) di browser. */
+const u = z.unknown().optional();
+const skemaBarisTempel = z.object({
+  nomor: z.coerce.number().default(0),
+  id: u, mataPelajaran: u, kelas: u, pertanyaan: u,
+  opsiA: u, opsiB: u, opsiC: u, opsiD: u,
+  kunci: u, skor: u, tipe: u, pembahasan: u,
+  bahasa: u, pekaHuruf: u, kode: u,
+}).transform((b): BarisImpor => ({
+  nomor: b.nomor,
+  nilai: Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'nomor').map(([k, v]) => [k, v === undefined || v === null ? '' : String(v)])),
+}));
+
+/** Impor dari tabel yang ditempel (Excel/Sheets/CSV) di browser. Gambar tidak bisa lewat jalur ini. */
 rutAdminSoal.post('/impor', async (req, res) => {
   const { baris, sekolahId: pilihan } = z.object({
     sekolahId: z.string().nullish(),
-    baris: z.array(z.record(z.string(), z.unknown())).max(500, 'Maksimal 500 soal per proses.'),
+    baris: z.array(skemaBarisTempel).max(500, 'Maksimal 500 soal per proses.'),
   }).parse(req.body);
   const sekolahId = pemilik(req.staf!, pilihan);
   await pastikanSekolahAda(sekolahId);
-  const dipakai = new Set((await prisma.soal.findMany({ select: { id: true } })).map((s) => s.id));
-  const idBaru = new Set<string>();
-  const ditolak = [];
-  let jumlah = 0;
+  const laporan = await imporSoal(baris, sekolahId);
+  if (laporan.jumlah) await catatLog(req.staf!, 'IMPOR_SOAL', `${laporan.jumlah} soal`);
+  res.json(laporan);
+});
 
-  for (const b of baris) {
-    try {
-      const data = dataSoal({
-        mataPelajaran: b.mataPelajaran, kelas: b.kelas, pertanyaan: b.pertanyaan,
-        opsi: [b.opsiA, b.opsiB, b.opsiC, b.opsiD], kunci: b.kunci, skor: b.skor, tipe: b.tipe, pembahasan: b.pembahasan,
-      });
-      const id = await idSoal(teks(b.id).toUpperCase(), data.mataPelajaran, sekolahId, idBaru);
-      if (dipakai.has(id)) throw galat(400, `ID ${id} sudah dipakai.`);
-      await prisma.soal.create({ data: { ...data, id, sekolahId } });
-      dipakai.add(id);
-      idBaru.add(id);
-      jumlah++;
-    } catch (err) {
-      ditolak.push({ nomor: Number(b.nomor) || 0, alasan: (err as Error).message });
-    }
-  }
-  if (jumlah) await catatLog(req.staf!, 'IMPOR_SOAL', `${jumlah} soal`);
-  res.json({ jumlah, ditolak });
+/** Impor dari berkas .xlsx, atau .zip berisi .xlsx dan gambar. Mendukung rumus LaTeX, kode, dan bahasa asing. */
+rutAdminSoal.post('/impor-berkas', unggahImpor.single('berkas'), async (req, res) => {
+  if (!req.file) throw galat(400, 'Pilih berkas .xlsx atau .zip terlebih dahulu.');
+  const sekolahId = pemilik(req.staf!, req.body?.sekolahId);
+  await pastikanSekolahAda(sekolahId);
+  const { baris, sumber, peringatan } = await bacaBerkasImpor(req.file.buffer);
+  if (!baris.length) throw galat(400, 'Tidak ada baris soal di berkas ini.');
+  const laporan = await imporSoal(baris, sekolahId, sumber);
+  if (laporan.jumlah) await catatLog(req.staf!, 'IMPOR_SOAL', `${laporan.jumlah} soal dari berkas`);
+  res.json({ ...laporan, peringatan });
+});
+
+rutAdminSoal.get('/template.xlsx', async (_req, res) => {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="template-soal.xlsx"');
+  res.send(await buatTemplateSoal());
 });

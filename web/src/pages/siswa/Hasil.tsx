@@ -2,6 +2,8 @@ import { ArrowLeft, Check, X } from '@phosphor-icons/react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { GambarSoal } from '@/components/GambarSoal';
+import { Teks } from '@/components/TeksKaya';
+import { atributLang } from '@/lib/bahasa';
 import { Galat, Memuat } from '@/components/Keadaan';
 import { BilahKepala } from '@/components/Merek';
 import { Badge } from '@/components/ui/badge';
@@ -82,33 +84,53 @@ function Angka({ label, nilai, kelas }: { label: string; nilai: number; kelas?: 
 }
 
 function ItemBahas({ p }: { p: ItemPembahasan }) {
-  const kunci = p.kunci.split(',');
-  const jawab = p.jawaban.split(',');
+  const isian = p.tipe === 'ISIAN';
+  const kunci = isian ? [] : p.kunci.split(',');
+  const jawab = isian ? [] : p.jawaban.split(',');
+  const diterima = isian ? p.kunci.split('\n').filter(Boolean) : [];
   return (
-    <li className="rounded-lg border border-garis bg-white p-5">
+    <li className="rounded-lg border border-garis bg-white p-5" lang={atributLang(p.bahasa)}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">Soal nomor {p.nomor}</span>
         <Badge variant={p.benar ? 'hijau' : p.jawaban ? 'merah' : 'default'}>{p.benar ? 'Benar' : p.jawaban ? 'Salah' : 'Tidak dijawab'}</Badge>
       </div>
-      <p className="mt-2 whitespace-pre-line">{p.pertanyaan}</p>
+      {p.pertanyaan && <Teks className="mt-2">{p.pertanyaan}</Teks>}
       <GambarSoal nama={p.gambar} />
-      <ul className="mt-3 space-y-1.5">
-        {p.opsi.map((o, i) => {
-          const h = 'ABCD'[i];
-          const isKunci = kunci.includes(h);
-          const isJawab = jawab.includes(h);
-          return (
-            <li key={h} className={cn('flex items-start gap-2 rounded-md px-3 py-2', isKunci ? 'bg-hijau-muda' : isJawab ? 'bg-merah-muda' : '')}>
-              <b>{h}.</b>
-              <span className="flex-1 whitespace-pre-line">{o}</span>
-              {isKunci && <Check className="size-5 text-hijau" aria-label="kunci jawaban" />}
-              {isJawab && !isKunci && <X className="size-5 text-merah" aria-label="jawaban Anda" />}
-              {isJawab && <span className="text-xs text-muted-foreground">jawaban Anda</span>}
-            </li>
-          );
-        })}
-      </ul>
-      {p.pembahasan && <p className="mt-3 rounded-md bg-kuning-muda px-3 py-2 whitespace-pre-line"><b>Pembahasan:</b> {p.pembahasan}</p>}
+      {isian ? (
+        <dl className="mt-3 space-y-1.5">
+          <div className={cn('rounded-md px-3 py-2', p.benar ? 'bg-hijau-muda' : p.jawaban ? 'bg-merah-muda' : 'bg-muted')}>
+            <dt className="text-xs font-semibold text-muted-foreground">Jawaban Anda</dt>
+            <dd dir="auto" className={cn('whitespace-pre-wrap break-words', p.kode && 'font-mono')}>{p.jawaban || 'Tidak dijawab'}</dd>
+          </div>
+          {!p.benar && diterima.length > 0 && (
+            <div className="rounded-md bg-hijau-muda px-3 py-2">
+              <dt className="text-xs font-semibold text-muted-foreground">Jawaban yang benar</dt>
+              <dd dir="auto" className={cn('whitespace-pre-wrap break-words', p.kode && 'font-mono')}>{diterima.join('  /  ')}</dd>
+            </div>
+          )}
+        </dl>
+      ) : (
+        <ul className="mt-3 space-y-1.5">
+          {p.opsi.map((o, i) => {
+            const h = 'ABCD'[i];
+            const isKunci = kunci.includes(h);
+            const isJawab = jawab.includes(h);
+            return (
+              <li key={h} className={cn('flex items-start gap-2 rounded-md px-3 py-2', isKunci ? 'bg-hijau-muda' : isJawab ? 'bg-merah-muda' : '')}>
+                <b>{h}.</b>
+                <span className="min-w-0 flex-1">
+                  {o && <Teks sebaris className="block">{o}</Teks>}
+                  <GambarSoal nama={p.opsiGambar?.[i]} alt={`Gambar pilihan ${h}`} className="max-h-44" />
+                </span>
+                {isKunci && <Check className="size-5 text-hijau" aria-label="kunci jawaban" />}
+                {isJawab && !isKunci && <X className="size-5 text-merah" aria-label="jawaban Anda" />}
+                {isJawab && <span className="text-xs text-muted-foreground">jawaban Anda</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {p.pembahasan && <div className="mt-3 rounded-md bg-kuning-muda px-3 py-2"><b>Pembahasan:</b> <Teks>{p.pembahasan}</Teks></div>}
     </li>
   );
 }

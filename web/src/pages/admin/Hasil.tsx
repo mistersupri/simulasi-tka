@@ -172,8 +172,8 @@ function DialogDetail({ id, kkm, tutup }: { id: string | null; kkm: number; tutu
                       <TableRow key={s.id}>
                         <TableCell>{s.nomor}</TableCell>
                         <TableCell><b>{s.id}</b><p className="line-clamp-1 text-xs text-muted-foreground">{s.pertanyaan}</p></TableCell>
-                        <TableCell><Badge variant={s.benar ? 'hijau' : s.jawaban ? 'merah' : 'default'}>{s.jawaban || 'Kosong'}</Badge></TableCell>
-                        <TableCell className="font-semibold">{s.kunci}</TableCell>
+                        <TableCell className="max-w-48"><Badge variant={s.benar ? 'hijau' : s.jawaban ? 'merah' : 'default'} className="max-w-full"><span dir="auto" className={cn('truncate', s.kode && 'font-mono')}>{s.jawaban || 'Kosong'}</span></Badge></TableCell>
+                        <TableCell className="max-w-48 font-semibold"><span dir="auto" className={cn('block truncate', s.kode && 'font-mono')}>{s.tipe === 'ISIAN' ? s.kunci.split('\n').join(' / ') : s.kunci}</span></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -202,7 +202,7 @@ type Analisis = {
   jumlahPeserta: number; rataRata: number; tertinggi: number; terendah: number; kkm: number; tuntas: number | null;
   sebaranNilai: number[]; perSekolah: Ringkasan[]; perKelas: Ringkasan[];
   butir: {
-    id: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number>; p: number; kategori: string;
+    id: string; tipe: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number>; p: number; kategori: string;
     dayaBeda: number | null; kategoriDayaBeda: string | null;
   }[];
 };
@@ -284,7 +284,7 @@ export function DialogAnalisis({ ujianId, sekolahId, tutup }: { ujianId: string 
                   {a.butir.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell><b>{b.id}</b><p className="line-clamp-1 max-w-72 text-xs text-muted-foreground">{b.pertanyaan}</p></TableCell>
-                      <TableCell className="font-semibold">{b.kunci}</TableCell>
+                      <TableCell className="max-w-40 font-semibold"><span dir="auto" className="block truncate">{b.tipe === 'ISIAN' ? b.kunci.split('\n').join(' / ') : b.kunci}</span></TableCell>
                       <TableCell className="tabular-nums"><b>{b.p}%</b> <span className="text-xs text-muted-foreground">({b.benar}/{b.peserta})</span></TableCell>
                       <TableCell><Badge variant={b.kategori === 'Mudah' ? 'hijau' : b.kategori === 'Sedang' ? 'kuning' : 'merah'}>{b.kategori}</Badge></TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -293,7 +293,7 @@ export function DialogAnalisis({ ujianId, sekolahId, tutup }: { ujianId: string 
                         )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        {['A', 'B', 'C', 'D'].map((h, i) => (
+                        {b.tipe === 'ISIAN' ? <span className="text-xs text-muted-foreground">soal isian</span> : ['A', 'B', 'C', 'D'].map((h, i) => (
                           <span key={h}>{i > 0 && ' / '}<span className={b.kunci.includes(h) ? 'font-semibold text-hijau' : ''}>{b.sebaran[h]}</span></span>
                         ))}
                       </TableCell>

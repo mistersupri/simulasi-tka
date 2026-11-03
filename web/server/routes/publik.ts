@@ -9,7 +9,7 @@ export const rutPublik = Router();
 
 rutPublik.get('/info', async (_req, res) => {
   const p = await ambilPengaturan();
-  res.json({ namaSekolah: p.NAMA_SEKOLAH, tahunAjaran: p.TAHUN_AJARAN, pengumuman: p.PENGUMUMAN, adaLogo: !!p.LOGO });
+  res.json({ namaInstansi: p.NAMA_SEKOLAH, tahunAjaran: p.TAHUN_AJARAN, pengumuman: p.PENGUMUMAN, adaLogo: !!p.LOGO });
 });
 
 /** Daftar sekolah aktif untuk form login siswa (hanya nama). */

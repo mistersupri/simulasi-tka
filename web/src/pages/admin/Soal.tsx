@@ -1,5 +1,5 @@
 import {
-  BookOpen, CaretRight, DownloadSimple, Eye, Image as IkonGambar, PencilSimple, Plus, Trash, UploadSimple,
+  BookOpen, CaretRight, DownloadSimple, Eye, FileArrowUp, Image as IkonGambar, PencilSimple, Plus, Trash, UploadSimple,
 } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -9,20 +9,20 @@ import {
   BilahPilihan, DialogDitolak, DialogImpor, KepalaHalaman, paramSekolah, useDaftarSekolah, usePilihan, useStaf, type Ditolak,
 } from '@/components/admin';
 import { GambarSoal } from '@/components/GambarSoal';
+import { Teks } from '@/components/TeksKaya';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Kosong, Memuat } from '@/components/Keadaan';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { FormSoal } from './FormSoal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { api, pesanGalat } from '@/lib/api';
-import { perkecilGambar } from '@/lib/gambar';
+import { adaMarkup } from '@/lib/teksKaya';
+import { atributLang, DAFTAR_BAHASA } from '@/lib/bahasa';
 import { unduhCsv, type KolomImpor } from '@/lib/tabel';
 import type { Soal } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 const HURUF = ['A', 'B', 'C', 'D'];
 const urutKelas = (a: string, b: string) => a.localeCompare(b, 'id', { numeric: true });
 
+// Urutan kolom impor tempel. Kolom baru (bahasa, peka huruf, kode) ada di ujung agar tempelan format lama tetap terbaca.
 const KOLOM_IMPOR: KolomImpor[] = [
   { kunci: 'id', header: ['ID_SOAL', 'ID'] },
   { kunci: 'mataPelajaran', header: ['MATA_PELAJARAN', 'MAPEL'] },
@@ -43,6 +44,9 @@ const KOLOM_IMPOR: KolomImpor[] = [
   { kunci: 'skor', header: ['SKOR', 'BOBOT'] },
   { kunci: 'tipe', header: ['TIPE_SOAL', 'TIPE'] },
   { kunci: 'pembahasan', header: ['PEMBAHASAN'] },
+  { kunci: 'bahasa', header: ['BAHASA'] },
+  { kunci: 'pekaHuruf', header: ['PEKA_HURUF'] },
+  { kunci: 'kode', header: ['KODE'] },
 ];
 
 const INSTANSI = 'instansi';
@@ -73,6 +77,7 @@ export default function HalamanSoal() {
   const [form, setForm] = useState<Soal | 'baru' | null>(null);
   const [pratinjau, setPratinjau] = useState<Soal | null>(null);
   const [impor, setImpor] = useState(false);
+  const [imporBerkas, setImporBerkas] = useState(false);
   const [ditolak, setDitolak] = useState<Ditolak[] | null>(null);
 
   const semua = q.data ?? [];
@@ -111,9 +116,13 @@ export default function HalamanSoal() {
       >
         <Button variant="outline" disabled={!semua.length} onClick={() => unduhCsv('bank-soal.csv', [
           KOLOM_IMPOR.map((k) => k.header[0]),
-          ...semua.map((s) => [s.id, s.mataPelajaran, s.kelas, s.pertanyaan, ...s.opsi, s.kunci, s.skor, s.tipe, s.pembahasan]),
+          ...semua.map((s) => [
+            s.id, s.mataPelajaran, s.kelas, s.pertanyaan, ...[0, 1, 2, 3].map((i) => s.opsi[i] ?? ''),
+            s.tipe === 'ISIAN' ? s.kunci.split('\n').join(' | ') : s.kunci, s.skor, s.tipe, s.pembahasan, s.bahasa, s.pekaHuruf ? 'YA' : '', s.kode ? 'YA' : '',
+          ]),
         ])}><DownloadSimple /> Unduh</Button>
-        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple /> Impor</Button>
+        <Button variant="outline" onClick={() => setImpor(true)}><UploadSimple /> Impor tempel</Button>
+        <Button variant="outline" onClick={() => setImporBerkas(true)}><FileArrowUp /> Impor berkas</Button>
         <Button onClick={() => setForm('baru')}><Plus /> Tambah soal</Button>
       </KepalaHalaman>
 
@@ -176,10 +185,22 @@ export default function HalamanSoal() {
                 <TableCell><Checkbox aria-label={`Pilih ${s.id}`} checked={pilihan.dipilih.has(s.id)} onCheckedChange={(v) => pilihan.ubah(s.id, !!v)} /></TableCell>
                 <TableCell><b>{s.id}</b>{!mapel && <div className="text-xs text-muted-foreground">{s.mataPelajaran} · kls {s.kelas}</div>}</TableCell>
                 <TableCell className="max-w-md">
-                  <p className="line-clamp-2">{s.gambar && <IkonGambar className="mr-1 inline size-4" aria-label="Bergambar" />}{s.pertanyaan}</p>
-                  {s.tipe === 'PGK' && <Badge variant="biru" className="mt-1">PG kompleks</Badge>}
+                  <p className="line-clamp-2" dir="auto" lang={atributLang(s.bahasa)}>
+                    {(s.gambar || s.opsiGambar?.some(Boolean)) && <IkonGambar className="mr-1 inline size-4" aria-label="Bergambar" />}
+                    {s.pertanyaan || <i className="text-muted-foreground">(soal berupa gambar)</i>}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {s.tipe === 'PGK' && <Badge variant="biru">PG kompleks</Badge>}
+                    {s.tipe === 'ISIAN' && <Badge variant="biru">{s.kode ? 'Isian kode' : 'Isian'}</Badge>}
+                    {s.bahasa !== 'id' && <Badge>{DAFTAR_BAHASA.find((b) => b.kode === s.bahasa)?.nama ?? s.bahasa}</Badge>}
+                    {adaMarkup(`${s.pertanyaan}\n${s.opsi.join('\n')}`) && <Badge>Rumus/kode</Badge>}
+                  </div>
                 </TableCell>
-                <TableCell className="font-semibold">{s.kunci}</TableCell>
+                <TableCell className="max-w-40 font-semibold">
+                  {s.tipe === 'ISIAN'
+                    ? <span dir="auto" className={cn('block truncate', s.kode && 'font-mono')}>{s.kunci.split('\n')[0]}{s.kunci.includes('\n') && ` (+${s.kunci.split('\n').length - 1})`}</span>
+                    : s.kunci}
+                </TableCell>
                 <TableCell>{s.skor}</TableCell>
                 <TableCell><Badge variant={s.aktif ? 'hijau' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
                 <TableCell>
@@ -203,10 +224,14 @@ export default function HalamanSoal() {
       <DialogPratinjau soal={pratinjau} tutup={() => setPratinjau(null)} />
       <DialogImpor
         buka={impor} setBuka={setImpor} judul="Impor soal" kolom={KOLOM_IMPOR}
-        petunjuk="Salin baris soal dari Excel atau Google Sheets (termasuk lembar BANK_SOAL versi lama), lalu tempel di bawah."
+        petunjuk={<>Salin baris soal dari Excel atau Google Sheets (termasuk lembar BANK_SOAL versi lama), lalu tempel di bawah. Rumus ditulis LaTeX di antara $...$. Soal isian: tulis TIPE <b>ISIAN</b> dan jawaban yang diterima di kolom kunci, dipisah tanda |. Untuk gambar, pakai <b>Impor berkas</b>.</>}
         template={[KOLOM_IMPOR.map((k) => k.header[0]),
-          ['', 'Matematika', '6', 'Hasil dari 125 + 75 adalah ....', '180', '190', '200', '210', 'C', '1', 'PG', '125 + 75 = 200'],
-          ['', 'Matematika', '6', 'Manakah yang merupakan bilangan prima?', '2', '4', '7', '9', 'A,C', '2', 'PGK', '']]}
+          ['', 'Matematika', '6', 'Hasil dari 125 + 75 adalah ....', '180', '190', '200', '210', 'C', '1', 'PG', '125 + 75 = 200', 'id', '', ''],
+          ['', 'Matematika', '6', 'Hasil dari $\\frac{3}{4} + \\frac{1}{2}$ adalah ....', '$1\\frac{1}{4}$', '$\\frac{4}{6}$', '$\\frac{5}{8}$', '$1$', 'A', '1', 'PG', '', 'id', '', ''],
+          ['', 'Matematika', '6', 'Manakah yang merupakan bilangan prima?', '2', '4', '7', '9', 'A,C', '2', 'PGK', '', 'id', '', ''],
+          ['', 'Bahasa Arab', '6', 'ما معنى كلمة «كِتَاب»؟', 'Buku', 'Pensil', 'Meja', 'Kursi', 'A', '1', 'PG', '', 'ar', '', ''],
+          ['', 'Bahasa Rusia', '6', 'Tulis "terima kasih" dalam bahasa Rusia', '', '', '', '', 'спасибо', '1', 'ISIAN', '', 'ru', '', ''],
+          ['', 'Informatika', '6', 'Tulis keluaran: print(2 + 3 * 4)', '', '', '', '', '14', '1', 'ISIAN', '', 'id', 'YA', 'YA']]}
         kirim={async (baris, progres) => {
           let jumlah = 0;
           const tolak: Ditolak[] = [];
@@ -222,151 +247,49 @@ export default function HalamanSoal() {
           qc.invalidateQueries({ queryKey: ['soal'] });
         }}
       />
+      <DialogImporBerkas buka={imporBerkas} setBuka={setImporBerkas} sekolahId={sekolahId} />
       <DialogDitolak ditolak={ditolak} tutup={() => setDitolak(null)} />
       {dialogKonfirmasi}
     </>
   );
 }
 
-function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, tutup }: {
-  soal: Soal | null; sekolahId: string | null; daftarMapel: string[]; awalKelas: string | null; awalMapel: string | null; tutup: () => void;
-}) {
-  const qc = useQueryClient();
-  const [d, setD] = useState(() => ({
-    id: soal?.id ?? '',
-    mataPelajaran: soal?.mataPelajaran ?? awalMapel ?? daftarMapel[0] ?? 'Matematika',
-    kelas: soal?.kelas ?? awalKelas ?? '6',
-    tipe: soal?.tipe ?? ('PG' as 'PG' | 'PGK'),
-    pertanyaan: soal?.pertanyaan ?? '',
-    opsi: soal?.opsi ?? ['', '', '', ''],
-    kunci: soal?.kunci.split(',').filter(Boolean) ?? [],
-    skor: String(soal?.skor ?? 1),
-    pembahasan: soal?.pembahasan ?? '',
-    aktif: soal?.aktif ?? true,
-    gambar: soal?.gambar ?? null,
-  }));
-  const [galat, setGalat] = useState('');
-  const [mengunggah, setMengunggah] = useState(false);
-  const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
-
-  const simpan = useMutation({
-    mutationFn: () => {
-      const body = { ...d, kunci: d.kunci.join(','), skor: Number(d.skor), sekolahId };
-      return soal ? api.put<{ pesan: string }>(`/admin/soal/${soal.id}`, body) : api.post<{ pesan: string }>('/admin/soal', body);
-    },
-    onSuccess: (r) => { toast.success(r.pesan); qc.invalidateQueries({ queryKey: ['soal'] }); tutup(); },
-    onError: (e) => setGalat(pesanGalat(e)),
-  });
-
-  const unggahGambar = async (file?: File) => {
-    if (!file) return;
-    setMengunggah(true);
-    try {
-      const form = new FormData();
-      form.append('gambar', await perkecilGambar(file), file.name);
-      ubah('gambar', (await api.post<{ nama: string }>('/admin/soal/gambar', form)).nama);
-    } catch (e) {
-      toast.error(pesanGalat(e));
-    } finally {
-      setMengunggah(false);
-    }
-  };
-
-  const pilihKunci = (h: string) => {
-    if (d.tipe === 'PG') return ubah('kunci', [h]);
-    ubah('kunci', d.kunci.includes(h) ? d.kunci.filter((k) => k !== h) : [...d.kunci, h].sort());
-  };
-
-  return (
-    <Dialog open onOpenChange={(b) => !b && tutup()}>
-      <DialogContent lebar>
-        <form onSubmit={(e) => { e.preventDefault(); setGalat(''); simpan.mutate(); }} className="flex min-h-0 flex-col">
-          <DialogHeader><DialogTitle>{soal ? `Ubah soal ${soal.id}` : 'Tambah soal'}</DialogTitle></DialogHeader>
-          <DialogBody className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-4">
-              <div className="space-y-1.5"><Label htmlFor="s-id">ID soal</Label><Input id="s-id" value={d.id} disabled={!!soal} placeholder="Otomatis" onChange={(e) => ubah('id', e.target.value.toUpperCase())} /></div>
-              <div className="space-y-1.5">
-                <Label htmlFor="s-mapel">Mata pelajaran</Label>
-                <Input id="s-mapel" list="daftar-mapel" value={d.mataPelajaran} onChange={(e) => ubah('mataPelajaran', e.target.value)} required />
-                <datalist id="daftar-mapel">{[...new Set([...daftarMapel, 'Matematika', 'Bahasa Indonesia'])].map((m) => <option key={m} value={m} />)}</datalist>
-              </div>
-              <div className="space-y-1.5"><Label htmlFor="s-kelas">Kelas</Label><Input id="s-kelas" value={d.kelas} onChange={(e) => ubah('kelas', e.target.value)} required /></div>
-              <div className="space-y-1.5">
-                <Label>Tipe soal</Label>
-                <Select value={d.tipe} onValueChange={(v) => setD((x) => ({ ...x, tipe: v as 'PG' | 'PGK', kunci: v === 'PG' ? x.kunci.slice(0, 1) : x.kunci }))}>
-                  <SelectTrigger aria-label="Tipe soal"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="PG">Pilihan ganda</SelectItem><SelectItem value="PGK">Pilihan ganda kompleks</SelectItem></SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5"><Label htmlFor="s-tanya">Pertanyaan</Label><Textarea id="s-tanya" rows={4} value={d.pertanyaan} onChange={(e) => ubah('pertanyaan', e.target.value)} required /></div>
-
-            <div className="space-y-1.5">
-              <span className="text-sm font-semibold">Gambar (opsional)</span>
-              {d.gambar && <GambarSoal nama={d.gambar} className="max-h-48" />}
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
-                  <UploadSimple className="size-4" /> {mengunggah ? 'Mengunggah...' : d.gambar ? 'Ganti gambar' : 'Pilih gambar'}
-                  <input type="file" accept="image/*" className="sr-only" disabled={mengunggah} onChange={(e) => unggahGambar(e.target.files?.[0])} />
-                </label>
-                {d.gambar && <Button type="button" size="sm" variant="ghost" onClick={() => ubah('gambar', null)}>Hapus gambar</Button>}
-                <span className="text-xs text-muted-foreground">Gambar besar otomatis diperkecil.</span>
-              </div>
-            </div>
-
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-semibold">
-                Pilihan jawaban <span className="font-semibold text-muted-foreground">({d.tipe === 'PGK' ? 'tandai SEMUA jawaban benar' : 'tandai satu jawaban benar'})</span>
-              </legend>
-              {HURUF.map((h, i) => (
-                <div key={h} className="flex items-center gap-2">
-                  <button
-                    type="button" onClick={() => pilihKunci(h)} aria-pressed={d.kunci.includes(h)} aria-label={`Jadikan ${h} kunci jawaban`}
-                    className={cn('grid size-11 shrink-0 place-content-center border font-semibold', d.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
-                      d.kunci.includes(h) ? 'border-hijau bg-hijau text-white' : 'border-input bg-white')}
-                  >{h}</button>
-                  <Input aria-label={`Opsi ${h}`} value={d.opsi[i]} onChange={(e) => ubah('opsi', d.opsi.map((o, j) => (j === i ? e.target.value : o)))} required />
-                </div>
-              ))}
-            </fieldset>
-
-            <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
-              <div className="space-y-1.5"><Label htmlFor="s-skor">Skor</Label><Input id="s-skor" type="number" min="0.5" step="0.5" value={d.skor} onChange={(e) => ubah('skor', e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="s-bahas">Pembahasan (opsional)</Label><Textarea id="s-bahas" rows={2} value={d.pembahasan} onChange={(e) => ubah('pembahasan', e.target.value)} placeholder="Tampil ke siswa bila ujian mengizinkan pembahasan" /></div>
-            </div>
-            <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => ubah('aktif', v)} /> Soal aktif (bisa muncul di ujian)</Label>
-            {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}
-          </DialogBody>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={tutup}>Batal</Button>
-            <Button type="submit" disabled={simpan.isPending || mengunggah}>{simpan.isPending ? 'Menyimpan...' : 'Simpan soal'}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function DialogPratinjau({ soal: s, tutup }: { soal: Soal | null; tutup: () => void }) {
+  const diterima = s?.tipe === 'ISIAN' ? s.kunci.split('\n').filter(Boolean) : [];
   return (
     <Dialog open={!!s} onOpenChange={(b) => !b && tutup()}>
       <DialogContent>
         {s && (
           <>
             <DialogHeader><DialogTitle>Pratinjau {s.id}</DialogTitle></DialogHeader>
-            <DialogBody>
-              <p className="text-sm text-muted-foreground">{s.mataPelajaran} · Kelas {s.kelas} · Skor {s.skor}</p>
-              <p className="mt-3 text-lg whitespace-pre-line">{s.pertanyaan}</p>
+            <DialogBody lang={atributLang(s.bahasa)}>
+              <p className="text-sm text-muted-foreground">
+                {s.mataPelajaran} · Kelas {s.kelas} · Skor {s.skor}{s.bahasa !== 'id' && ` · ${DAFTAR_BAHASA.find((b) => b.kode === s.bahasa)?.nama ?? s.bahasa}`}
+              </p>
+              {s.pertanyaan && <Teks className="mt-3 text-lg">{s.pertanyaan}</Teks>}
               <GambarSoal nama={s.gambar} />
-              <ul className="mt-3 space-y-2">
-                {s.opsi.map((o, i) => (
-                  <li key={i} className={cn('rounded-md border px-3 py-2', s.kunci.includes(HURUF[i]) ? 'border-hijau bg-hijau-muda font-semibold' : 'border-border')}>
-                    {HURUF[i]}. {o}
-                  </li>
-                ))}
-              </ul>
-              {s.pembahasan && <p className="mt-3 rounded-md bg-kuning-muda px-3 py-2"><b>Pembahasan:</b> {s.pembahasan}</p>}
+              {s.tipe === 'ISIAN' ? (
+                <div className="mt-3 space-y-2">
+                  <div aria-hidden className={cn('rounded-md border border-input bg-white px-3 py-2 text-muted-foreground', s.kode && 'font-mono')}>Kotak jawaban siswa</div>
+                  <div className="rounded-md border border-hijau bg-hijau-muda px-3 py-2">
+                    <p className="text-xs font-semibold text-muted-foreground">Jawaban yang diterima{s.pekaHuruf ? ' (huruf besar/kecil dibedakan)' : ''}</p>
+                    <ul className={cn('font-semibold', s.kode && 'font-mono')} dir="auto">{diterima.map((j) => <li key={j}>{j}</li>)}</ul>
+                  </div>
+                </div>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {s.opsi.map((o, i) => (
+                    <li key={i} className={cn('flex items-start gap-2 rounded-md border px-3 py-2', s.kunci.includes(HURUF[i]) ? 'border-hijau bg-hijau-muda font-semibold' : 'border-border')}>
+                      <span>{HURUF[i]}.</span>
+                      <span className="min-w-0 flex-1">
+                        {o && <Teks sebaris className="block">{o}</Teks>}
+                        <GambarSoal nama={s.opsiGambar?.[i]} alt={`Gambar pilihan ${HURUF[i]}`} className="max-h-40" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {s.pembahasan && <div className="mt-3 rounded-md bg-kuning-muda px-3 py-2"><b>Pembahasan:</b> <Teks>{s.pembahasan}</Teks></div>}
             </DialogBody>
           </>
         )}
@@ -422,5 +345,93 @@ function DaftarKelompok({ judul, kelompok, label, rincian, pilih }: {
         ))}
       </ul>
     </section>
+  );
+}
+
+type LaporanBerkas = { jumlah: number; ditolak: { nomor: number; alasan: string }[]; peringatan: string[] };
+
+/** Impor dari .xlsx atau .zip (Excel + gambar). Mendukung rumus LaTeX, kode, bahasa asing, soal isian, dan gambar. */
+function DialogImporBerkas({ buka, setBuka, sekolahId }: { buka: boolean; setBuka: (b: boolean) => void; sekolahId: string | null }) {
+  const qc = useQueryClient();
+  const [berkas, setBerkas] = useState<File | null>(null);
+  const [laporan, setLaporan] = useState<LaporanBerkas | null>(null);
+  const kirim = useMutation({
+    mutationFn: () => {
+      const form = new FormData();
+      form.append('berkas', berkas!);
+      if (sekolahId) form.append('sekolahId', sekolahId);
+      return api.post<LaporanBerkas>('/admin/soal/impor-berkas', form);
+    },
+    onSuccess: (r) => {
+      setLaporan(r);
+      qc.invalidateQueries({ queryKey: ['soal'] });
+      if (r.jumlah) toast.success(`${r.jumlah} soal diimpor.`);
+    },
+    onError: (e) => toast.error(pesanGalat(e)),
+  });
+  const tutup = (b: boolean) => {
+    if (kirim.isPending) return;
+    setBuka(b);
+    if (!b) { setBerkas(null); setLaporan(null); }
+  };
+  return (
+    <Dialog open={buka} onOpenChange={tutup}>
+      <DialogContent lebar>
+        <DialogHeader>
+          <DialogTitle>Impor soal dari berkas</DialogTitle>
+          <DialogDescription>Unggah satu berkas Excel (.xlsx), atau ZIP berisi Excel beserta gambar-gambarnya.</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
+          {!laporan ? (
+            <>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                <li><b>Rumus matematika:</b> tulis LaTeX di antara $...$, mis. <code className="rounded-sm bg-kode px-1">{'$\\frac{3}{4}$'}</code>. Bisa di pertanyaan, pilihan, dan pembahasan.</li>
+                <li><b>Gambar dari berkas:</b> isi kolom GAMBAR (soal) atau GAMBAR_A sampai GAMBAR_D (pilihan) dengan nama berkas, lalu kumpulkan Excel dan gambarnya dalam satu ZIP.</li>
+                <li><b>Gambar ditempel di Excel:</b> letakkan gambar di sel kolom PERTANYAAN atau OPSI_A sampai OPSI_D pada baris soalnya (gambar mengambang biasa; tidak perlu ZIP). Cocok untuk rumus yang berupa gambar.</li>
+                <li><b>Kode program, soal isian, dan bahasa asing</b> (Arab, Mandarin, Rusia, dan lainnya): lihat contoh di template.</li>
+              </ul>
+              <div className="flex flex-wrap items-center gap-2">
+                <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href="/api/admin/soal/template.xlsx" download><DownloadSimple /> Unduh template Excel</a>
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
+                  <UploadSimple className="size-4" /> {berkas ? 'Ganti berkas' : 'Pilih berkas .xlsx atau .zip'}
+                  <input type="file" accept=".xlsx,.zip" className="sr-only" onChange={(e) => { setBerkas(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                </label>
+                {berkas && <span className="text-sm font-semibold">{berkas.name} <span className="font-normal text-muted-foreground">({(berkas.size / 1024 / 1024).toFixed(1)} MB)</span></span>}
+              </div>
+              <p className="text-xs text-muted-foreground">Maksimal 40 MB, 500 soal, dan 5 MB per gambar. Baris yang bermasalah dilewati dan dilaporkan; baris lain tetap masuk.</p>
+            </>
+          ) : (
+            <div role="status" className="space-y-3">
+              <p className="rounded-md bg-hijau-muda px-3 py-2 font-semibold">{laporan.jumlah} soal berhasil diimpor.</p>
+              {laporan.peringatan.length > 0 && (
+                <div className="rounded-md bg-kuning-muda px-3 py-2 text-sm">
+                  <p className="font-semibold">Perhatian:</p>
+                  <ul className="mt-1 list-disc pl-5">{laporan.peringatan.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                </div>
+              )}
+              {laporan.ditolak.length > 0 && (
+                <div className="rounded-md bg-merah-muda px-3 py-2 text-sm">
+                  <p className="font-semibold text-merah">{laporan.ditolak.length} baris dilewati:</p>
+                  <ul className="mt-1 list-disc pl-5">{laporan.ditolak.map((d, i) => <li key={i}><b>Baris {d.nomor}:</b> {d.alasan}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          {!laporan ? (
+            <>
+              <Button variant="outline" disabled={kirim.isPending} onClick={() => tutup(false)}>Batal</Button>
+              <Button disabled={!berkas || kirim.isPending} onClick={() => kirim.mutate()}>{kirim.isPending ? 'Mengimpor...' : 'Impor'}</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => { setLaporan(null); setBerkas(null); }}>Impor berkas lain</Button>
+              <Button onClick={() => tutup(false)}>Selesai</Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

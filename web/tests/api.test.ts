@@ -1,5 +1,9 @@
 import request from 'supertest';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
+import fs from 'node:fs';
+import path from 'node:path';
+import { config } from '../server/config.ts';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../server/db.ts';
 import { tandaAplikasi } from '../server/lib/aplikasi.ts';
@@ -261,7 +265,7 @@ describe('admin', () => {
   it('pengaturan, logo, ganti sandi, backup, log', async () => {
     const { admin, siswa } = await siapkan();
     await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', TAHUN_AJARAN: '2026/2027', PENGUMUMAN: 'Halo', KKM: 75, SISWA_BOLEH_GANTI_PASSWORD: false }).expect(200);
-    expect((await request(app).get('/api/info')).body).toMatchObject({ namaSekolah: 'SD Uji', pengumuman: 'Halo' });
+    expect((await request(app).get('/api/info')).body).toMatchObject({ namaInstansi: 'SD Uji', pengumuman: 'Halo' });
     await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: 200, SISWA_BOLEH_GANTI_PASSWORD: true }).expect(400);
 
     await admin.post('/api/admin/logo').attach('logo', PNG, 'logo.png').expect(200);
@@ -497,6 +501,190 @@ describe('soal & ujian sekolah, username per sekolah, impor sekolah, kunci login
     expect((await prisma.gagalLogin.findFirstOrThrow()).jumlah).toBe(1);
     await request(app).post('/api/auth/staf/login').send({ username: 'admin', password: 'admin123' }).expect(200);
     expect(await prisma.gagalLogin.count()).toBe(0);
+  });
+});
+
+describe('soal isian, gambar pilihan, bahasa asing, impor berkas', () => {
+  beforeEach(kosongkanDb);
+
+  const adaBerkas = (nama: string) => fs.existsSync(path.join(config.uploadDir, 'gambar', nama));
+  const jumlahBerkas = () => (fs.existsSync(path.join(config.uploadDir, 'gambar')) ? fs.readdirSync(path.join(config.uploadDir, 'gambar')).length : 0);
+  const dasar = { mataPelajaran: 'Informatika', kelas: '6', pertanyaan: 'Tulis keluaran: print(2 + 3 * 4)' };
+  const buatUjian = async (admin: { post: (u: string) => { send: (b: object) => Promise<{ body: { id: string } }> } }, mapel: string) =>
+    (await admin.post('/api/admin/ujian').send({ nama: `Ujian ${mapel}`, mataPelajaran: mapel, kelas: '6', maksPercobaan: 0, acakSoal: false, acakOpsi: true })).body.id;
+
+  it('soal isian: kunci tidak bocor, penilaian dinormalkan, peka huruf, dan beberapa jawaban diterima', async () => {
+    const { admin, siswa } = await siapkan();
+    await admin.post('/api/admin/soal').send({ ...dasar, tipe: 'ISIAN', kunci: '', opsi: [] }).expect(400);
+    const a = (await admin.post('/api/admin/soal').send({ ...dasar, tipe: 'ISIAN', kunci: '14\nempat belas', kode: true, pekaHuruf: true }).expect(200)).body.id;
+    const b = (await admin.post('/api/admin/soal').send({
+      mataPelajaran: 'Informatika', kelas: '6', pertanyaan: 'Kata "terima kasih" dalam bahasa Rusia', tipe: 'ISIAN', bahasa: 'ru', kunci: 'спасибо',
+    }).expect(200)).body.id;
+    const c = (await admin.post('/api/admin/soal').send({
+      mataPelajaran: 'Informatika', kelas: '6', pertanyaan: 'Tulis "buku" dalam bahasa Arab', tipe: 'ISIAN', bahasa: 'ar', kunci: 'كتاب',
+    }).expect(200)).body.id;
+    expect(await prisma.soal.findUniqueOrThrow({ where: { id: a } })).toMatchObject({ kunci: '14\nempat belas', opsi: [], pekaHuruf: true, kode: true, tipe: 'ISIAN' });
+
+    const ujian = await buatUjian(admin, 'Informatika');
+    const paket = (await siswa.post(`/api/siswa/ujian/${ujian}/mulai`).send({}).expect(200)).body;
+    expect(JSON.stringify(paket)).not.toContain('empat belas');
+    expect(JSON.stringify(paket)).not.toContain('спасибо');
+    const soal = Object.fromEntries(paket.soal.map((x: { id: string }) => [x.id, x]));
+    expect(soal[a]).toMatchObject({ tipe: 'ISIAN', opsi: [], kode: true });
+    expect(soal[b].bahasa).toBe('ru');
+
+    // Jawaban disimpan apa adanya (bukan dipetakan sebagai huruf pilihan), lalu bisa dimuat ulang.
+    await siswa.put(`/api/siswa/sesi/${paket.sesiId}/jawaban`).send({ jawaban: { [a]: '  empat   belas ', [b]: 'САСПИБО' } }).expect(200);
+    expect((await siswa.post(`/api/siswa/ujian/${ujian}/mulai`).send({})).body.jawaban[a]).toBe('empat   belas');
+
+    // a: peka huruf & spasi dinormalkan => "empat belas" benar; "EMPAT BELAS" salah. b: salah. c: harakat dibuang => benar.
+    const hasil = (await siswa.post(`/api/siswa/sesi/${paket.sesiId}/kirim`).send({ jawaban: { [a]: 'EMPAT BELAS', [b]: 'Спасибо', [c]: 'كِتَاب' } }).expect(200)).body;
+    expect(hasil).toMatchObject({ benar: 2, salah: 1 });
+    const detail = (await admin.get(`/api/admin/hasil/${(await prisma.hasil.findFirstOrThrow()).id}`).expect(200)).body.soal;
+    expect(detail.find((x: { id: string }) => x.id === a)).toMatchObject({ benar: false, jawaban: 'EMPAT BELAS', kunci: '14\nempat belas' });
+    expect(detail.find((x: { id: string }) => x.id === b)).toMatchObject({ benar: true, jawaban: 'Спасибо' });
+    expect(detail.find((x: { id: string }) => x.id === c)).toMatchObject({ benar: true });
+
+    // Analisis tidak memasukkan jawaban isian ke sebaran A-D.
+    const analisis = (await admin.get(`/api/admin/analisis/${ujian}`).expect(200)).body.analisis;
+    expect(analisis.butir.find((x: { id: string }) => x.id === a)).toMatchObject({ tipe: 'ISIAN', sebaran: { A: 0, B: 0, C: 0, D: 0 }, benar: 0 });
+  });
+
+  it('gambar pada pilihan: boleh tanpa teks, ikut teracak, tidak bocor, dan dibersihkan saat diubah/dihapus', async () => {
+    const { admin, siswa } = await siapkan();
+    const gambar = async () => (await admin.post('/api/admin/soal/gambar').attach('gambar', PNG, 'a.png').expect(200)).body.nama as string;
+    const [g1, g2, g3, g4] = [await gambar(), await gambar(), await gambar(), await gambar()];
+    const soal = { mataPelajaran: 'Bahasa Mandarin', kelas: '6', pertanyaan: 'Manakah huruf "山"?', bahasa: 'zh', kunci: 'B' };
+
+    await admin.post('/api/admin/soal').send({ ...soal, opsi: ['', '', '', ''], opsiGambar: [g1, g2, '', g4] }).expect(400); // pilihan C kosong
+    await admin.post('/api/admin/soal').send({ ...soal, opsi: ['', '', '', ''], opsiGambar: ['../x.png', g2, g3, g4] }).expect(400); // nama berkas tidak sah
+    const id = (await admin.post('/api/admin/soal').send({ ...soal, opsi: ['', '', 'teks C', ''], opsiGambar: [g1, g2, '', g4] }).expect(200)).body.id;
+    expect(await prisma.soal.findUniqueOrThrow({ where: { id } })).toMatchObject({ opsiGambar: [g1, g2, '', g4], bahasa: 'zh' });
+    await admin.post('/api/admin/soal').send({ ...soal, bahasa: 'klingon', opsi: ['a', 'b', 'c', 'd'] }).expect(400);
+
+    const ujian = await buatUjian(admin, 'Bahasa Mandarin');
+    const paket = (await siswa.post(`/api/siswa/ujian/${ujian}/mulai`).send({}).expect(200)).body;
+    // Gambar ikut urutan teracak: pilihan B (kunci) bergambar g2.
+    const s = paket.soal[0];
+    const posisiB = s.opsiGambar.indexOf(g2);
+    await siswa.get(`/api/berkas/gambar/${g2}`).expect(200);
+    const hasil = (await siswa.post(`/api/siswa/sesi/${paket.sesiId}/kirim`).send({ jawaban: { [id]: 'ABCD'[posisiB] } }).expect(200)).body;
+    expect(hasil.benar).toBe(1);
+
+    // Mengganti gambar pilihan membuang berkas lama; gambar yang masih dipakai soal lain tetap ada.
+    const lain = (await admin.post('/api/admin/soal').send({ ...soal, opsi: ['a', 'b', 'c', 'd'], gambar: g1 }).expect(200)).body.id;
+    await admin.put(`/api/admin/soal/${id}`).send({ ...soal, opsi: ['a', 'b', 'c', 'd'], opsiGambar: [g1, '', '', ''] }).expect(200);
+    expect(adaBerkas(g2)).toBe(false);
+    expect(adaBerkas(g4)).toBe(false);
+    expect(adaBerkas(g1)).toBe(true);
+    await admin.post('/api/admin/soal/hapus').send({ ids: [id] }).expect(200);
+    expect(adaBerkas(g1)).toBe(true); // masih dipakai soal lain
+    await admin.post('/api/admin/soal/hapus').send({ ids: [lain] }).expect(200);
+    expect(adaBerkas(g1)).toBe(false);
+  });
+
+  async function xlsxContoh(denganGambar: boolean) {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('SOAL');
+    ws.addRow(['MATA_PELAJARAN', 'KELAS', 'TIPE_SOAL', 'BAHASA', 'PERTANYAAN', 'OPSI_A', 'OPSI_B', 'OPSI_C', 'OPSI_D', 'KUNCI_JAWABAN', 'GAMBAR', 'GAMBAR_B']);
+    ws.addRow(['Matematika', '6', 'PG', 'id', 'Hasil $\\frac{3}{4}+\\frac{1}{2}$ adalah ....', '$1\\frac{1}{4}$', '$\\frac{4}{6}$', '$\\frac{5}{8}$', '$1$', 'A', '', '']);
+    ws.addRow(['Bahasa Arab', '6', 'PG', 'ar', 'ما معنى «كِتَاب»؟', 'Buku', 'Pensil', 'Meja', 'Kursi', 'A', '', '']);
+    ws.addRow(['Informatika', '6', 'ISIAN', 'id', 'Keluaran?\n```python\nprint(2+3*4)\n```', '', '', '', '', '14|empat belas', '', '']);
+    ws.addRow(['Bahasa Mandarin', '6', 'PG', 'zh', 'Pilih gambar "山"', 'A', '', 'C', 'D', 'B', 'soal.png', 'pilihan-b.png']);
+    ws.addRow(['Bahasa Rusia', '6', 'PG', 'tlh', 'Bahasa salah', 'a', 'b', 'c', 'd', 'A', '', '']);
+    if (denganGambar) {
+      const id = wb.addImage({ buffer: PNG as never, extension: 'png' });
+      ws.addImage(id, { tl: { col: 4, row: 1 }, ext: { width: 24, height: 24 } }); // di kolom PERTANYAAN baris 2: gambar soal
+      ws.addImage(id, { tl: { col: 6, row: 1 }, ext: { width: 24, height: 24 } }); // di kolom OPSI_B baris 2: gambar pilihan B
+      ws.addImage(id, { tl: { col: 20, row: 1 }, ext: { width: 24, height: 24 } }); // kolom tak dikenal: diabaikan
+    }
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  it('impor .xlsx: rumus LaTeX, Arab, isian, kode, dan gambar yang ditempel di sel; baris salah dilaporkan', async () => {
+    const { admin } = await siapkan();
+    const sebelum = jumlahBerkas();
+    const r = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', await xlsxContoh(true), 'soal.xlsx').expect(200)).body;
+    // Baris 5 merujuk berkas gambar tanpa ZIP, baris 6 berbahasa tak dikenal.
+    expect(r.jumlah).toBe(3);
+    expect(r.ditolak.map((d: { nomor: number }) => d.nomor)).toEqual([5, 6]);
+    expect(r.ditolak[0].alasan).toMatch(/ZIP/);
+    expect(r.ditolak[1].alasan).toMatch(/tidak dikenal/);
+    expect(r.peringatan.join(' ')).toMatch(/diabaikan/);
+
+    const mtk = await prisma.soal.findFirstOrThrow({ where: { mataPelajaran: 'Matematika', id: { startsWith: 'MTK' } }, orderBy: { id: 'desc' } });
+    expect(mtk.pertanyaan).toBe('Hasil $\\frac{3}{4}+\\frac{1}{2}$ adalah ....');
+    expect(mtk.opsi[0]).toBe('$1\\frac{1}{4}$');
+    expect(mtk.gambar).toMatch(/\.png$/);
+    expect(mtk.opsiGambar[1]).toMatch(/\.png$/);
+    expect(adaBerkas(mtk.gambar!)).toBe(true);
+    const arab = await prisma.soal.findFirstOrThrow({ where: { mataPelajaran: 'Bahasa Arab' } });
+    expect(arab).toMatchObject({ bahasa: 'ar', id: 'BAR001' });
+    expect(arab.pertanyaan).toBe('ما معنى «كِتَاب»؟');
+    const kode = await prisma.soal.findFirstOrThrow({ where: { mataPelajaran: 'Informatika' } });
+    expect(kode).toMatchObject({ tipe: 'ISIAN', kunci: '14\nempat belas', id: 'INF001' });
+    expect(kode.pertanyaan).toContain('```python');
+    // Soal yang ditolak tidak meninggalkan berkas gambar yatim.
+    expect(jumlahBerkas() - sebelum).toBe(2);
+  });
+
+  it('impor .zip: gambar dirujuk lewat nama berkas, dipakai ulang, dan galat ZIP ditangani', async () => {
+    const { admin } = await siapkan();
+    const zip = new JSZip();
+    zip.file('petunjuk/soal.xlsx', await xlsxContoh(false));
+    zip.file('gambar/SOAL.PNG', PNG);
+    zip.file('gambar/pilihan-b.png', PNG);
+    zip.file('gambar/catatan.txt', 'bukan gambar');
+    const r = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', await zip.generateAsync({ type: 'nodebuffer' }), 'paket.zip').expect(200)).body;
+    expect(r.jumlah).toBe(4);
+    expect(r.ditolak.map((d: { nomor: number }) => d.nomor)).toEqual([6]);
+    const mandarin = await prisma.soal.findFirstOrThrow({ where: { mataPelajaran: 'Bahasa Mandarin' } });
+    expect(mandarin).toMatchObject({ bahasa: 'zh', kunci: 'B' });
+    expect(mandarin.gambar).toMatch(/\.png$/);
+    expect(mandarin.opsiGambar).toEqual(['', expect.stringMatching(/\.png$/), '', '']);
+    expect(mandarin.opsi).toEqual(['A', '', 'C', 'D']);
+
+    const tanpaGambar = new JSZip();
+    tanpaGambar.file('soal.xlsx', await xlsxContoh(false));
+    const r2 = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', await tanpaGambar.generateAsync({ type: 'nodebuffer' }), 'p.zip').expect(200)).body;
+    expect(r2.ditolak.find((d: { nomor: number }) => d.nomor === 5).alasan).toMatch(/tidak ditemukan di dalam ZIP/);
+
+    // Baris yang gagal di tengah jalan (gambar soal ada, gambar pilihan hilang) menggulung balik berkas yang sudah tersimpan.
+    const separuh = new JSZip();
+    separuh.file('soal.xlsx', await xlsxContoh(false));
+    separuh.file('soal.png', PNG);
+    const sebelum = jumlahBerkas();
+    const r3 = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', await separuh.generateAsync({ type: 'nodebuffer' }), 'p.zip').expect(200)).body;
+    expect(r3.ditolak.find((d: { nomor: number }) => d.nomor === 5).alasan).toMatch(/pilihan-b\.png/);
+    expect(jumlahBerkas()).toBe(sebelum);
+
+    const kosong = new JSZip();
+    kosong.file('a.png', PNG);
+    await admin.post('/api/admin/soal/impor-berkas').attach('berkas', await kosong.generateAsync({ type: 'nodebuffer' }), 'k.zip').expect(400);
+    await admin.post('/api/admin/soal/impor-berkas').attach('berkas', Buffer.from('bukan zip'), 'k.zip').expect(400);
+    await admin.post('/api/admin/soal/impor-berkas').expect(400);
+  });
+
+  it('template Excel dapat diunduh dan langsung bisa diimpor (semua contoh sah); operator mengimpor ke bank sekolahnya', async () => {
+    const { admin, sekolahId } = await siapkan();
+    const unduh = await admin.get('/api/admin/soal/template.xlsx').buffer(true)
+      .parse((res, cb) => { const d: Buffer[] = []; res.on('data', (c: Buffer) => d.push(c)); res.on('end', () => cb(null, Buffer.concat(d))); }).expect(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(unduh.body);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['SOAL', 'PETUNJUK']);
+
+    const r = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', unduh.body, 'template.xlsx').expect(200)).body;
+    expect(r.ditolak).toEqual([]);
+    expect(r.jumlah).toBe(10);
+    expect(await prisma.soal.count({ where: { bahasa: { in: ['ar', 'zh', 'ru'] } } })).toBe(4);
+
+    await admin.post('/api/admin/pengguna').send({ nama: 'Op', username: 'opa', peran: 'OPERATOR', sekolahId, password: 'rahasia1' }).expect(200);
+    const op = request.agent(app);
+    await op.post('/api/auth/staf/login').send({ username: 'opa', password: 'rahasia1' }).expect(200);
+    const r2 = (await op.post('/api/admin/soal/impor-berkas').attach('berkas', unduh.body, 'template.xlsx').expect(200)).body;
+    expect(r2.jumlah).toBe(10);
+    expect(await prisma.soal.count({ where: { sekolahId } })).toBe(10);
+    expect((await prisma.soal.findFirstOrThrow({ where: { sekolahId, mataPelajaran: 'Bahasa Arab' } })).id).toBe('20100001-BAR001');
   });
 });
 

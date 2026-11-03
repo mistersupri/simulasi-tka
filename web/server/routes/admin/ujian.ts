@@ -12,7 +12,8 @@ import {
 } from '../../lib/mesin.ts';
 import { ambilPengaturan, kkmDari } from '../../lib/pengaturan.ts';
 import { butuhStaf, filterSekolah, pastikanSekolah, sekolahStaf, type Staf } from '../../lib/sesi.ts';
-import { buatTokenUjian, daftarKelas, normalisasiKunci } from '../../lib/util.ts';
+import { nilaiJawaban } from '../../lib/jawaban.ts';
+import { buatTokenUjian, daftarKelas } from '../../lib/util.ts';
 
 /**
  * Jadwal ujian, hasil, analisis, dan monitor.
@@ -208,7 +209,7 @@ async function analisis(ujianId: string, sekolahId: string | null) {
   const kkm = kkmDari(await ambilPengaturan());
   const peta = await petaSoal();
   const nilai = hasil.map((h) => h.nilai);
-  const butir = new Map<string, { id: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number> }>();
+  const butir = new Map<string, { id: string; tipe: string; pertanyaan: string; kunci: string; peserta: number; benar: number; kosong: number; sebaran: Record<string, number> }>();
 
   // Kelompok atas & bawah (27% nilai tertinggi/terendah) untuk daya beda.
   const urut = [...hasil].sort((a, b) => b.nilai - a.nilai);
@@ -224,16 +225,17 @@ async function analisis(ujianId: string, sekolahId: string | null) {
     for (const id of ids) {
       const soal = peta.get(id);
       if (!soal) continue;
-      const b = butir.get(id) ?? { id, pertanyaan: soal.pertanyaan, kunci: soal.kunci, peserta: 0, benar: 0, kosong: 0, sebaran: { A: 0, B: 0, C: 0, D: 0 } };
-      const jawab = normalisasiKunci(jawaban[id], soal.tipe);
+      const b = butir.get(id) ?? { id, tipe: soal.tipe, pertanyaan: soal.pertanyaan, kunci: soal.kunci, peserta: 0, benar: 0, kosong: 0, sebaran: { A: 0, B: 0, C: 0, D: 0 } };
+      const { jawab, benar } = nilaiJawaban(soal, jawaban[id]);
       b.peserta++;
       if (!jawab) b.kosong++;
-      else if (jawab === soal.kunci) {
+      else if (benar) {
         b.benar++;
         if (atas.has(h.id)) benarAtas.set(id, (benarAtas.get(id) ?? 0) + 1);
         if (bawah.has(h.id)) benarBawah.set(id, (benarBawah.get(id) ?? 0) + 1);
       }
-      for (const x of jawab.split(',')) if (x in b.sebaran) b.sebaran[x]++;
+      // Sebaran A-D hanya bermakna untuk pilihan ganda.
+      if (soal.tipe !== 'ISIAN') for (const x of jawab.split(',')) if (x in b.sebaran) b.sebaran[x]++;
       butir.set(id, b);
     }
   }

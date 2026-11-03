@@ -9,7 +9,7 @@ export type SekolahPilihan = { id: string; nama: string; npsn: string | null; ak
 export type Sekolah = SekolahPilihan & {
   alamat: string; dibuat: string; jumlahSiswa: number; jumlahOperator: number; jumlahGuru: number; jumlahHasil: number; rataRata: number | null;
 };
-export type Info = { namaSekolah: string; tahunAjaran: string; pengumuman: string; adaLogo: boolean };
+export type Info = { namaInstansi: string; tahunAjaran: string; pengumuman: string; adaLogo: boolean };
 
 export type StatusUjian = 'TERSEDIA' | 'BERLANGSUNG' | 'SELESAI' | 'BELUM_DIBUKA' | 'DITUTUP';
 export type UjianSiswa = {
@@ -19,7 +19,10 @@ export type UjianSiswa = {
 };
 export type Riwayat = { id: string; namaUjian: string; mataPelajaran: string; tanggal: string; nilai: number | null; tuntas: boolean | null; adaPembahasan: boolean };
 
-export type SoalTampil = { id: string; tipe: 'PG' | 'PGK'; pertanyaan: string; gambar: string | null; opsi: string[] };
+export type TipeSoal = 'PG' | 'PGK' | 'ISIAN';
+export type SoalTampil = {
+  id: string; tipe: TipeSoal; bahasa: string; kode: boolean; pertanyaan: string; gambar: string | null; opsi: string[]; opsiGambar: string[];
+};
 export type PaketUjian = {
   sesiId: string;
   ujian: { id: string; nama: string; mataPelajaran: string; wajibLayarPenuh: boolean; wajibKamera: boolean; maksPelanggaran: number; intervalRekamLayar: number };
@@ -31,7 +34,7 @@ export type PaketUjian = {
 };
 
 export type ItemPembahasan = {
-  nomor: number; id: string; tipe: 'PG' | 'PGK'; pertanyaan: string; gambar: string | null; opsi: string[];
+  nomor: number; id: string; tipe: TipeSoal; bahasa: string; kode: boolean; pertanyaan: string; gambar: string | null; opsi: string[]; opsiGambar: string[];
   jawaban: string; kunci: string; benar: boolean; pembahasan: string;
 };
 export type StatusHasil = 'SELESAI' | 'WAKTU_HABIS' | 'DIHENTIKAN' | 'PELANGGARAN';
@@ -57,8 +60,8 @@ export const LABEL_PELANGGARAN: Record<JenisPelanggaran, string> = {
 };
 
 export type Soal = {
-  id: string; mataPelajaran: string; kelas: string; pertanyaan: string; opsi: string[]; kunci: string; skor: number;
-  tipe: 'PG' | 'PGK'; gambar: string | null; pembahasan: string; aktif: boolean;
+  id: string; mataPelajaran: string; kelas: string; pertanyaan: string; opsi: string[]; opsiGambar: string[]; kunci: string; skor: number;
+  tipe: TipeSoal; bahasa: string; pekaHuruf: boolean; kode: boolean; gambar: string | null; pembahasan: string; aktif: boolean;
 };
 export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;

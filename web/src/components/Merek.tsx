@@ -11,7 +11,7 @@ export function Merek({ className, kecil, terang }: { className?: string; kecil?
         <img src="/api/logo" alt="" className={cn('shrink-0 rounded-sm bg-white object-contain p-0.5', kecil ? 'size-9' : 'size-11')} />
       )}
       <div className="min-w-0 leading-tight">
-        <div className={cn('truncate font-semibold', kecil ? 'text-[15px]' : 'text-lg')}>{info?.namaSekolah ?? 'Simulasi TKA'}</div>
+        <div className={cn('truncate font-semibold', kecil ? 'text-[15px]' : 'text-lg')}>{info?.namaInstansi ?? 'Simulasi TKA'}</div>
         <div className={cn('truncate text-xs', terang ? 'text-biru-pucat' : 'text-muted-foreground')}>
           Simulasi Tes Kemampuan Akademik{info?.tahunAjaran ? ` · Tahun Ajaran ${info.tahunAjaran}` : ''}
         </div>

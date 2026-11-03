@@ -4,11 +4,13 @@
  * Jawaban selalu disimpan dalam huruf ASLI (sesuai urutan opsi di bank soal).
  * Bila opsi diacak, posisi tampil dipetakan lewat urutan sesi:
  *   { i: idSoal, o: [indeks opsi asli untuk posisi tampil 0..3] }
+ * Soal ISIAN tidak punya pilihan: o = [] dan jawabannya berupa teks apa adanya.
  */
 import { config } from '../config.ts';
 import { prisma, type Soal, type StatusHasil } from '../db.ts';
 import { galat } from './galat.ts';
-import { HURUF, normalisasiKunci } from './util.ts';
+import { MAKS_PANJANG_ISIAN, nilaiJawaban } from './jawaban.ts';
+import { HURUF } from './util.ts';
 
 export type ItemUrutan = { i: string; o: number[] };
 export type Jawaban = Record<string, string>;
@@ -24,14 +26,18 @@ function hurufKeIndeks(nilai: unknown): number[] {
   return daftar.map((h) => HURUF.indexOf(String(h).trim().toUpperCase() as never)).filter((i) => i !== -1);
 }
 
+const adalahIsian = (item: ItemUrutan) => item.o.length === 0;
+
 /** Huruf yang dilihat siswa → huruf asli. */
 export function keHurufAsli(item: ItemUrutan, tampil: unknown): string {
+  if (adalahIsian(item)) return String(tampil ?? '').trim().slice(0, MAKS_PANJANG_ISIAN);
   const asli = hurufKeIndeks(tampil).map((i) => HURUF[item.o[i] ?? i]);
   return [...new Set(asli)].sort().join(',');
 }
 
 /** Huruf asli → huruf yang dilihat siswa. */
 export function keHurufTampil(item: ItemUrutan, asli: string): string {
+  if (adalahIsian(item)) return asli;
   return hurufKeIndeks(asli)
     .map((i) => HURUF[item.o.indexOf(i)])
     .sort()
@@ -57,6 +63,7 @@ export function jawabanKeTampil(urutan: ItemUrutan[], jawaban: Jawaban): Jawaban
 /**
  * PG  : benar bila huruf sama dengan kunci.
  * PGK : benar bila semua pilihan tepat (tanpa nilai parsial).
+ * ISIAN: benar bila cocok dengan salah satu jawaban yang diterima (lihat lib/jawaban.ts).
  * Soal kosong dihitung salah sekaligus dicatat sebagai kosong.
  */
 export function hitungNilai(daftarId: string[], jawaban: Jawaban, peta: PetaSoal) {
@@ -66,10 +73,10 @@ export function hitungNilai(daftarId: string[], jawaban: Jawaban, peta: PetaSoal
   for (const id of daftarId) {
     const soal = peta.get(id);
     if (!soal || !soal.kunci) continue;
-    const jawab = normalisasiKunci(jawaban[id], soal.tipe);
+    const { jawab, benar } = nilaiJawaban(soal, jawaban[id]);
     hasil.jumlahSoal++;
     maks += soal.skor;
-    if (jawab && jawab === soal.kunci) {
+    if (benar) {
       hasil.benar++;
       skor += soal.skor;
     } else {
@@ -158,17 +165,22 @@ export function susunPembahasan(urutan: ItemUrutan[], jawaban: Jawaban, peta: Pe
   return urutan.flatMap((item, nomor) => {
     const soal = peta.get(item.i);
     if (!soal) return [];
-    const jawab = normalisasiKunci(jawaban[item.i], soal.tipe);
+    const { jawab, benar } = nilaiJawaban(soal, jawaban[item.i]);
+    const isian = soal.tipe === 'ISIAN';
     return [{
       nomor: nomor + 1,
       id: soal.id,
       tipe: soal.tipe,
+      bahasa: soal.bahasa,
+      kode: soal.kode,
       pertanyaan: soal.pertanyaan,
       gambar: soal.gambar,
-      opsi: item.o.map((k) => soal.opsi[k] ?? ''),
-      jawaban: keHurufTampil(item, jawab),
-      kunci: denganKunci ? keHurufTampil(item, soal.kunci) : '',
-      benar: !!jawab && jawab === soal.kunci,
+      // Isian tidak punya pilihan; urutan item admin ([0..3]) tidak boleh dipakai untuk memetakan teks.
+      opsi: isian ? [] : item.o.map((k) => soal.opsi[k] ?? ''),
+      opsiGambar: isian ? [] : item.o.map((k) => soal.opsiGambar[k] ?? ''),
+      jawaban: isian ? jawab : keHurufTampil(item, jawab),
+      kunci: denganKunci ? (isian ? soal.kunci : keHurufTampil(item, soal.kunci)) : '',
+      benar,
       pembahasan: denganKunci ? soal.pembahasan : '',
     }];
   });

@@ -25,8 +25,9 @@ enum JenisSesiLogin {
 }
 
 enum TipeSoal {
-  PG  // pilihan ganda, satu kunci
-  PGK // pilihan ganda kompleks, kunci lebih dari satu
+  PG     // pilihan ganda, satu kunci
+  PGK    // pilihan ganda kompleks, kunci lebih dari satu
+  ISIAN  // isian singkat / kode: siswa mengetik, dinilai otomatis dari daftar jawaban yang diterima
 }
 
 enum StatusSesiUjian {
@@ -128,10 +129,16 @@ model Soal {
   mataPelajaran String
   kelas         String
   pertanyaan    String
-  opsi          String[] // selalu 4: A, B, C, D
-  kunci         String   // "B" atau "A,C"
+  opsi          String[] // PG/PGK: selalu 4 (A, B, C, D); ISIAN: kosong
+  // Gambar tiap pilihan (nama berkas, "" bila tanpa gambar), sejajar dengan opsi. Kosong = tanpa gambar.
+  opsiGambar    String[] @default([])
+  kunci         String   // PG "B", PGK "A,C", ISIAN: jawaban yang diterima dipisah baris baru
   skor          Float    @default(1)
   tipe          TipeSoal @default(PG)
+  // Bahasa/aksara soal (kode ISO, mis. "ar", "zh", "ru"): menentukan font dan arah tulisan.
+  bahasa        String   @default("id")
+  pekaHuruf     Boolean  @default(false) // ISIAN: huruf besar/kecil dibedakan
+  kode          Boolean  @default(false) // ISIAN: kotak jawaban berhuruf monospace (program/keluaran program)
   gambar        String?  // nama berkas di UPLOAD_DIR/gambar
   pembahasan    String   @default("")
   aktif         Boolean  @default(true)

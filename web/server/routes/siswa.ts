@@ -119,7 +119,12 @@ async function paketUjian(sesi: SesiUjian, ujian: Ujian) {
     },
     soal: urutan.flatMap((item) => {
       const s = peta.get(item.i);
-      return s ? [{ id: s.id, tipe: s.tipe, pertanyaan: s.pertanyaan, gambar: s.gambar, opsi: item.o.map((k) => s.opsi[k] ?? '') }] : [];
+      // Kunci jawaban (termasuk jawaban isian yang diterima) tidak pernah dikirim ke siswa.
+      return s ? [{
+        id: s.id, tipe: s.tipe, bahasa: s.bahasa, kode: s.kode, pertanyaan: s.pertanyaan, gambar: s.gambar,
+        opsi: item.o.map((k) => s.opsi[k] ?? ''),
+        opsiGambar: item.o.map((k) => s.opsiGambar[k] ?? ''),
+      }] : [];
     }),
     jawaban: jawabanKeTampil(urutan, sesi.jawaban as Jawaban),
     ragu: sesi.ragu,
@@ -158,7 +163,8 @@ rutSiswa.post('/ujian/:ujianId/mulai', async (req, res) => {
   if (ujian.acakSoal) soal = acak(soal);
   if (ujian.jumlahSoal > 0) soal = soal.slice(0, ujian.jumlahSoal);
 
-  const urutan: ItemUrutan[] = soal.map((s) => ({ i: s.id, o: ujian.acakOpsi ? acak([0, 1, 2, 3]) : [0, 1, 2, 3] }));
+  // Soal isian tidak punya pilihan: o kosong (lihat lib/mesin.ts).
+  const urutan: ItemUrutan[] = soal.map((s) => ({ i: s.id, o: s.tipe === 'ISIAN' ? [] : ujian.acakOpsi ? acak([0, 1, 2, 3]) : [0, 1, 2, 3] }));
   const sekarang = Date.now();
   let batas = ujian.durasiMenit > 0 ? sekarang + ujian.durasiMenit * 60000 : null;
   if (ujian.waktuSelesai) batas = Math.min(batas ?? Infinity, ujian.waktuSelesai.getTime());

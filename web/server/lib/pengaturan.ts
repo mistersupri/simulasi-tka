@@ -1,7 +1,7 @@
 import { prisma } from '../db.ts';
 
 export const PENGATURAN_BAWAAN = {
-  // Nama instansi penyelenggara (Suku Dinas Pendidikan). Kunci lama dipertahankan agar data lama tetap terbaca.
+  // Nama instansi penyelenggara (Suku Dinas Pendidikan). Nama kunci NAMA_SEKOLAH dipertahankan agar data lama tetap terbaca.
   NAMA_SEKOLAH: 'Suku Dinas Pendidikan Wilayah II Jakarta Pusat',
   TAHUN_AJARAN: '2026/2027',
   PENGUMUMAN: '',

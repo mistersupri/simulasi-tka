@@ -70,11 +70,11 @@ export default function HalamanPengaturan() {
 
   return (
     <>
-      <KepalaHalaman judul="Pengaturan" />
+      <KepalaHalaman judul="Pengaturan instansi" keterangan="Berlaku untuk semua sekolah binaan." />
       <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
         <Card>
           <form onSubmit={(e) => { e.preventDefault(); simpan.mutate(); }} className="space-y-4">
-            <CardTitle>Identitas sekolah</CardTitle>
+            <CardTitle>Identitas instansi</CardTitle>
             <div className="space-y-1.5"><Label htmlFor="p-nama">Nama instansi</Label><Input id="p-nama" value={d.NAMA_SEKOLAH} onChange={(e) => setD({ ...d, NAMA_SEKOLAH: e.target.value })} required /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label htmlFor="p-tahun">Tahun ajaran</Label><Input id="p-tahun" value={d.TAHUN_AJARAN} onChange={(e) => setD({ ...d, TAHUN_AJARAN: e.target.value })} /></div>
@@ -93,9 +93,9 @@ export default function HalamanPengaturan() {
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Logo sekolah</CardTitle>
-            <CardDescription>Tampil di halaman login dan kartu ujian. Tanpa logo, nama sekolah dipakai sebagai teks.</CardDescription>
-            {q.data.adaLogo && <img src={`/api/logo?v=${versiLogo}`} alt="Logo sekolah" className="mt-3 size-24 rounded-md border border-border object-contain" />}
+            <CardTitle>Logo instansi</CardTitle>
+            <CardDescription>Tampil di halaman login dan kartu ujian semua sekolah. Tanpa logo, nama instansi dipakai sebagai teks.</CardDescription>
+            {q.data.adaLogo && <img src={`/api/logo?v=${versiLogo}`} alt="Logo instansi" className="mt-3 size-24 rounded-md border border-border object-contain" />}
             <div className="mt-3 flex flex-wrap gap-2">
               <label className={buttonVariants({ variant: 'outline', size: 'sm', className: 'cursor-pointer focus-within:outline-3 focus-within:outline-biru' })}>
                 <UploadSimple /> {logo.isPending ? 'Mengunggah...' : q.data.adaLogo ? 'Ganti logo' : 'Unggah logo'}

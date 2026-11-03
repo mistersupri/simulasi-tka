@@ -14,7 +14,7 @@ import { daftarKelas, normalisasiKelas, teks } from './util.ts';
  * Nilai sel seperti yang terlihat di layar. Excel sering mengubah "3/4"
  * menjadi tanggal; dengan format m/d kita kembalikan menjadi teks "3/4".
  */
-function teksSel(sel: ExcelJS.Cell): string {
+export function teksSel(sel: ExcelJS.Cell): string {
   const v = sel.value;
   if (v instanceof Date) {
     const fmt = (sel.numFmt ?? '').toLowerCase();

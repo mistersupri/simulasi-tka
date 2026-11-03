@@ -69,7 +69,8 @@ Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operator
   dari satu sekolah, form login siswa menampilkan pilihan sekolah yang diingat di perangkat itu
   (komputer lab cukup memilih sekali). Username petugas tetap unik untuk seluruh instansi.
 
-- Bank soal: tambah/ubah, gambar, PG kompleks, pratinjau, impor tempel dari Excel/CSV, unduh.
+- Bank soal: dikelompokkan kelas, lalu mata pelajaran, lalu soal. Tipe soal: pilihan ganda, PG kompleks,
+  dan **isian singkat/kode**. Pratinjau, unduh, impor tempel dan **impor berkas** (lihat di bawah).
 - Jadwal ujian: mapel, kelas, durasi, jumlah soal acak, jadwal buka/tutup, token, acak opsi,
   aturan pengawasan.
 - Hasil: detail jawaban & catatan pelanggaran per siswa, analisis butir soal (tingkat kesukaran,
@@ -94,6 +95,24 @@ Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operator
 Memperbarui dari versi satu sekolah: `prisma migrate deploy` memindahkan semua siswa, guru, dan
 hasil lama ke sekolah pertama bernama sesuai pengaturan lama, akun guru tetap guru di sekolah itu,
 dan nama instansi bisa diganti di Pengaturan.
+
+### Soal kaya: rumus, gambar, kode, dan bahasa asing
+
+| Kebutuhan | Cara |
+|---|---|
+| **Rumus matematika** | LaTeX di antara `$...$` (dalam kalimat) atau `$$...$$` (satu baris sendiri), di pertanyaan, pilihan, dan pembahasan. Formulir soal punya tombol bantu (pecahan, akar, pangkat, dst.) dan pratinjau langsung. Dirender KaTeX di browser siswa. Tanda dolar biasa ("harga $5 dan $10") tidak dianggap rumus; tulis `\$` bila perlu. |
+| **Gambar pada soal dan pilihan** | Tiap pilihan boleh berupa teks, rumus, gambar, atau gabungannya; soal boleh hanya berupa gambar. Gambar ikut teracak bersama pilihannya. |
+| **Soal pemrograman** | Blok kode berpagar ` ```python ... ``` ` tampil berwarna (python, javascript, java, c, cpp, csharp, php, sql, html, css, bash, json, pascal). Siswa menjawab lewat pilihan ganda, atau tipe **Isian singkat/kode**: mengetik keluaran program atau potongan kode, dinilai otomatis dari daftar jawaban yang diterima (spasi dinormalkan; huruf besar/kecil dibedakan bila diatur). **Kode siswa tidak dijalankan di server.** |
+| **Bahasa asing** | Pilih bahasa soal (Arab, Mandarin, Jepang, Korea, Rusia, Hindi, Thai, Ibrani, Persia, Urdu, dan lainnya). Menentukan font; arah tulisan kanan-ke-kiri dikenali otomatis per teks, jadi soal Indonesia dengan pilihan Arab tampil benar. Siswa mengetik jawaban isian dengan keyboard bahasa itu. |
+
+**Impor berkas** (tombol *Impor berkas* di Bank soal; unduh template di dialognya):
+- `.xlsx` saja: rumus LaTeX di sel; gambar boleh **ditempel di sel Excel** (kolom PERTANYAAN atau OPSI_A..D pada baris soalnya, gambar mengambang biasa, bukan "Place in Cell").
+- `.zip`: satu `.xlsx` dan gambar-gambarnya; kolom GAMBAR dan GAMBAR_A..D berisi nama berkas gambar.
+- Kolom tambahan: TIPE_SOAL (PG/PGK/ISIAN), BAHASA, PEKA_HURUF, KODE. Jawaban isian dipisah tanda `|` di kolom kunci.
+- Baris bermasalah dilewati dan dilaporkan; berkas gambar baris yang gagal tidak tertinggal. Maksimal 40 MB, 500 soal, 5 MB per gambar.
+- Belum ada impor langsung dari Word (.docx); rumus dari Word bisa ditempel sebagai gambar di Excel.
+
+**Font.** Latin, Kiril, dan Arab ikut dibundel (Source Sans 3, Noto Naskh Arabic). Mandarin, Jepang, Korea, Hindi, Thai, dan Ibrani memakai font sistem komputer siswa: Windows 10/11 sudah punya; Linux (termasuk aplikasi ujian AppImage/deb) perlu paket fonts-noto-cjk bila belum terpasang.
 
 ## Menjalankan untuk pengembangan
 
@@ -181,5 +200,5 @@ web/
 
 ```bash
 createdb simulasi_tka_test     # sekali saja
-npm test                       # 26 skenario API: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor
+npm test                       # 37 skenario: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor soal (rumus, gambar, ZIP), penguraian rumus/kode
 ```

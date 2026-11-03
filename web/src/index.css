@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@fontsource-variable/source-sans-3';
+@import '@fontsource-variable/noto-naskh-arabic';
 
 /* Token desain: lihat DESIGN.md untuk alasan tiap warna. */
 @theme inline {
@@ -38,6 +39,7 @@
   --color-kuning-muda: #fdf3d0;
   --color-merah: var(--merah);
   --color-merah-muda: #fce8e6;
+  --color-kode: #f1f4f8;
 
   --radius-sm: 3px;
   --radius-md: 4px;
@@ -54,6 +56,37 @@
   --kuning: #f2b705;
   --merah: #b42318;
 }
+
+/*
+ * Soal berbahasa asing. Huruf Latin tetap memakai Source Sans 3 (font pertama); huruf Arab memakai
+ * Noto Naskh Arabic yang ikut dibundel. Aksara Han, Hangul, Devanagari, dan Thai memakai font bawaan sistem
+ * (komputer lab perlu memilikinya, mis. paket fonts-noto-cjk di Linux).
+ */
+:lang(ar), :lang(fa), :lang(ur) { font-family: 'Source Sans 3 Variable', 'Noto Naskh Arabic Variable', 'Segoe UI', Tahoma, Arial, sans-serif; line-height: 1.9; }
+:lang(he) { font-family: 'Source Sans 3 Variable', 'Segoe UI', 'Arial Hebrew', 'Noto Sans Hebrew', Arial, sans-serif; }
+:lang(zh) { font-family: 'Source Sans 3 Variable', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', sans-serif; }
+:lang(zh-Hant) { font-family: 'Source Sans 3 Variable', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', sans-serif; }
+:lang(ja) { font-family: 'Source Sans 3 Variable', 'Yu Gothic UI', Meiryo, 'Hiragino Sans', 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif; }
+:lang(ko) { font-family: 'Source Sans 3 Variable', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'Noto Sans KR', sans-serif; }
+:lang(hi) { font-family: 'Source Sans 3 Variable', 'Nirmala UI', Mangal, 'Noto Sans Devanagari', sans-serif; line-height: 1.7; }
+:lang(th) { font-family: 'Source Sans 3 Variable', 'Leelawadee UI', Tahoma, 'Noto Sans Thai', sans-serif; line-height: 1.7; }
+
+/* Pewarnaan kode (highlight.js). Semua warna lolos kontras WCAG AA di atas latar kode #f1f4f8. */
+.hljs { color: var(--tinta); background: transparent; }
+.hljs-comment, .hljs-quote { color: #566070; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-literal.hljs-bool { color: #8f1d7d; font-weight: 600; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: #0b6b3a; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { color: #a3410a; }
+.hljs-title, .hljs-title.function_, .hljs-section, .hljs-built_in { color: #1d4f9f; }
+.hljs-type, .hljs-class .hljs-title, .hljs-title.class_ { color: #7a4a00; }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-name, .hljs-selector-class, .hljs-selector-id { color: #0a6a6a; }
+.hljs-meta, .hljs-meta .hljs-keyword, .hljs-template-variable { color: #6a3fa0; }
+.hljs-variable, .hljs-params, .hljs-deletion { color: #9a2b2b; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+/* Rumus KaTeX sedikit lebih kecil dari bawaannya agar sebaris dengan teks soal. */
+.katex { font-size: 1.1em; }
 
 @layer base {
   * {

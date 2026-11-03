@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { GambarSoal } from '@/components/GambarSoal';
+import { Teks } from '@/components/TeksKaya';
 import { useKonfirmasi } from '@/components/Konfirmasi';
 import { Galat, Memuat } from '@/components/Keadaan';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,8 @@ import {
 import { useRekamLayar } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { formatJam } from '@/lib/format';
-import { LABEL_PELANGGARAN, type HasilSiswa, type JenisPelanggaran, type PaketUjian } from '@/lib/tipe';
+import { LABEL_PELANGGARAN, type HasilSiswa, type JenisPelanggaran, type PaketUjian, type SoalTampil } from '@/lib/tipe';
+import { atributLang } from '@/lib/bahasa';
 import { cn } from '@/lib/utils';
 
 const HURUF = ['A', 'B', 'C', 'D'];
@@ -186,6 +188,13 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     ubahJawaban(berikut);
   };
 
+  const isiJawabanIsian = (nilai: string) => {
+    const berikut = { ...jawaban };
+    if (nilai.trim()) berikut[soal.id] = nilai;
+    else delete berikut[soal.id];
+    ubahJawaban(berikut);
+  };
+
   const tandaiRagu = () => {
     const baru = ragu.includes(soal.id) ? ragu.filter((r) => r !== soal.id) : [...ragu, soal.id];
     setRagu(baru);
@@ -296,14 +305,18 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
               maks={paket.ujian.maksPelanggaran}
             />
           ) : (
-            <section className="rounded-lg border border-garis bg-white p-5 sm:p-7" aria-labelledby="nomor-soal">
+            <section className="rounded-lg border border-garis bg-white p-5 sm:p-7" aria-labelledby="nomor-soal" lang={atributLang(soal.bahasa)}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id="nomor-soal" className="rounded-sm bg-biru px-3 py-1 text-[15px] text-white">Soal nomor {indeks + 1}</h2>
                 {soal.tipe === 'PGK' && <span className="rounded-sm bg-biru-muda px-3 py-1 text-sm font-medium text-biru-tua">Pilih lebih dari satu jawaban</span>}
+                {soal.tipe === 'ISIAN' && <span className="rounded-sm bg-biru-muda px-3 py-1 text-sm font-medium text-biru-tua">Ketik jawaban</span>}
               </div>
-              <p className="mt-4 leading-relaxed whitespace-pre-line" style={{ fontSize: 'var(--ukuran-soal)' }}>{soal.pertanyaan}</p>
+              {soal.pertanyaan && <Teks className="mt-4 leading-relaxed" style={{ fontSize: 'var(--ukuran-soal)' }}>{soal.pertanyaan}</Teks>}
               <GambarSoal nama={soal.gambar} />
 
+              {soal.tipe === 'ISIAN' ? (
+                <KotakIsian soal={soal} nilai={jawaban[soal.id] ?? ''} ubah={isiJawabanIsian} />
+              ) : (
               <div className="mt-5 space-y-3" role={soal.tipe === 'PGK' ? 'group' : 'radiogroup'} aria-label="Pilihan jawaban">
                 {soal.opsi.map((teks, i) => {
                   const huruf = HURUF[i];
@@ -326,11 +339,15 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
                         soal.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
                         dipilih ? 'border-biru bg-biru text-white' : 'border-input',
                       )}>{huruf}</span>
-                      <span className="pt-1 whitespace-pre-line">{teks}</span>
+                      <span className="min-w-0 flex-1 pt-1">
+                        {teks && <Teks sebaris className="block">{teks}</Teks>}
+                        <GambarSoal nama={soal.opsiGambar?.[i]} alt={`Gambar pilihan ${huruf}`} className="max-h-52" />
+                      </span>
                     </button>
                   );
                 })}
               </div>
+              )}
 
               <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <Button variant="outline" size="lg" disabled={indeks === 0} onClick={() => setIndeks((i) => i - 1)}>
@@ -481,6 +498,42 @@ function DialogPeringatan({ peringatan, tutup }: { peringatan: Peringatan | null
         </p>
         <Button size="lg" className="mt-6 w-full" autoFocus onClick={tutup}>Saya mengerti, lanjutkan</Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Jawaban isian: siswa mengetik. Tempel (Ctrl+V) tetap ditolak oleh pengawasan; Ctrl+A di kotak ini diizinkan.
+ * Kotak ikut bahasa soal (huruf dan arah tulisan) sehingga jawaban Arab/Mandarin/Rusia bisa diketik dengan keyboard bahasa itu.
+ */
+function KotakIsian({ soal, nilai, ubah }: { soal: SoalTampil; nilai: string; ubah: (v: string) => void }) {
+  const umum = {
+    id: 'jawaban-isian',
+    'data-isian': true,
+    value: nilai,
+    maxLength: 500,
+    dir: 'auto' as const,
+    lang: atributLang(soal.bahasa),
+    autoComplete: 'off',
+    autoCorrect: 'off',
+    autoCapitalize: 'off',
+    spellCheck: false,
+    'aria-describedby': 'petunjuk-isian',
+    className: cn(
+      'w-full rounded-md border border-input bg-white px-3 py-2 text-tinta select-text focus-visible:border-biru',
+      soal.kode && 'font-mono',
+    ),
+    style: { fontSize: 'var(--ukuran-soal)' },
+  };
+  return (
+    <div className="mt-5">
+      <label htmlFor="jawaban-isian" className="mb-1.5 block text-sm font-semibold">Jawaban Anda</label>
+      {soal.kode
+        ? <textarea {...umum} rows={4} onChange={(e) => ubah(e.target.value)} />
+        : <input {...umum} type="text" onChange={(e) => ubah(e.target.value)} />}
+      <p id="petunjuk-isian" className="mt-1.5 text-sm text-muted-foreground">
+        Ketik jawabannya langsung. Tersimpan otomatis{soal.kode ? '; huruf besar dan kecil dibedakan' : ''}.
+      </p>
     </div>
   );
 }
