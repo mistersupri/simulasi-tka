@@ -42,7 +42,9 @@ export function jelaskanGalatKamera(galat: Galat | null | undefined, konteks: { 
     return buat(
       'dipakai',
       'Kamera tidak bisa dibuka',
-      'Kamera sedang dipakai aplikasi lain (Zoom, Teams, aplikasi Kamera, tab browser lain) atau drivernya bermasalah. Tutup aplikasi itu, lalu coba lagi.',
+      /timeout/i.test(galat?.message ?? '')
+        ? 'Kamera tidak merespons tepat waktu (bukan karena izin). Biasanya driver webcam lambat atau tersangkut: cabut dan colok ulang kabel USB webcam, atau mulai ulang komputer, lalu coba lagi.'
+        : 'Kamera sedang dipakai aplikasi lain (Zoom, Teams, aplikasi Kamera, tab browser lain) atau drivernya bermasalah. Tutup aplikasi itu, lalu coba lagi.',
     );
   }
   return buat('lain', 'Kamera gagal dinyalakan', 'Coba lagi. Bila tetap gagal, beri tahu pengawas dan sebutkan kode galat di catatan pelanggaran.');
