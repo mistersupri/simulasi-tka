@@ -1,0 +1,42 @@
+name: Kamera native
+
+# Kompilasi dan uji asap pembaca kamera native Windows (desktop/kamera-native) setiap kali berubah.
+on:
+  push:
+    paths:
+      - 'desktop/kamera-native/**'
+      - '.github/workflows/kamera-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & uji asap (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop/kamera-native
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish
+        run: dotnet publish -c Release -o publish
+      - name: Ukuran berkas
+        run: Get-Item publish/kamera-native.exe | Select-Object Name, Length
+      - name: Uji asap --daftar (runner tanpa kamera, harus keluar bersih dengan JSON)
+        run: |
+          $hasil = & ./publish/kamera-native.exe --daftar
+          if ($LASTEXITCODE -ne 0) { throw "kode keluar $LASTEXITCODE" }
+          Write-Output "Keluaran: $hasil"
+          $null = $hasil | ConvertFrom-Json
+      - name: Uji asap kamera tidak ada (harus GALAT NotFoundError, kode 2)
+        run: |
+          $galat = & ./publish/kamera-native.exe --kamera tidak-ada 2>&1 | Out-String
+          Write-Output "Keluaran: $galat"
+          if ($LASTEXITCODE -ne 2) { throw "kode keluar $LASTEXITCODE" }
+          if ($galat -notmatch 'GALAT:NotFoundError') { throw 'galat tidak sesuai' }
