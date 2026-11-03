@@ -26,6 +26,7 @@ type StatusTes = 'idle' | 'memuat' | 'ok' | 'hitam' | 'gagal';
 
 const LABEL_MODE: Record<string, string> = {
   'standar': 'Standar (seperti Chrome)',
+  'native': 'Native Windows (seperti aplikasi Camera)',
   'directshow': 'DirectShow (webcam lama)',
   'mf-tanpa-d3d11': 'Media Foundation tanpa akselerasi kamera',
   'tanpa-gpu': 'Tanpa akselerasi GPU',

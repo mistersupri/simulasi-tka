@@ -228,6 +228,13 @@ jobs:
         run: npm ci
       - name: Setel versi aplikasi
         run: npm version "${{ needs.siapkan.outputs.versi }}" --no-git-tag-version --allow-same-version
+      - uses: actions/setup-dotnet@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build kamera native (Windows)
+        if: matrix.os == 'windows-latest'
+        run: dotnet publish kamera-native -c Release -o kamera-native/publish
       - name: Build installer
         run: npm run ${{ matrix.skrip }}
         env:

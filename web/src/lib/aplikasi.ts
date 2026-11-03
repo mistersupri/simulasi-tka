@@ -12,6 +12,14 @@ type JembatanAplikasi = {
   modeKamera?: () => Promise<{ mode: string; daftar: string[] } | null>;
   /** Simpan mode kamera lalu mulai ulang aplikasi. */
   gantiModeKamera?: (mode: string) => Promise<boolean>;
+  /** Kamera native Windows (mode "native"): proses terpisah yang mengirim JPEG. */
+  kameraNative?: {
+    daftar: () => Promise<{ id: string; nama: string }[]>;
+    mulai: (id: string, token: string) => Promise<boolean>;
+    henti: (token?: string) => Promise<void>;
+    padaBingkai: (cb: (token: string, data: Uint8Array) => void) => () => void;
+    padaBerhenti: (cb: (token: string, info: { nama: string; pesan: string }) => void) => () => void;
+  };
   /** Tangkapan seluruh layar (JPEG) oleh aplikasi, tanpa dialog berbagi layar. */
   tangkapLayar: () => Promise<Uint8Array | null>;
   /**

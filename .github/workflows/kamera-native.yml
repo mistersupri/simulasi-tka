@@ -40,3 +40,4 @@ jobs:
           Write-Output "Keluaran: $galat"
           if ($LASTEXITCODE -ne 2) { throw "kode keluar $LASTEXITCODE" }
           if ($galat -notmatch 'GALAT:NotFoundError') { throw 'galat tidak sesuai' }
+          $global:LASTEXITCODE = 0  # kode 2 di atas memang diharapkan

@@ -19,6 +19,22 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   modeKamera: () => ipcRenderer.invoke('tka:mode-kamera'),
   /** Simpan mode kamera lalu mulai ulang aplikasi. Hanya bisa di layar persiapan. */
   gantiModeKamera: (mode) => ipcRenderer.invoke('tka:ganti-mode-kamera', mode),
+  /** Kamera native Windows: proses terpisah yang mengirim JPEG (mode kamera "native"). */
+  kameraNative: {
+    daftar: () => ipcRenderer.invoke('tka:kamera-native-daftar'),
+    mulai: (id, token) => ipcRenderer.invoke('tka:kamera-native-mulai', id, token),
+    henti: (token) => ipcRenderer.invoke('tka:kamera-native-henti', token),
+    padaBingkai: (cb) => {
+      const h = (_e, token, data) => cb(token, data);
+      ipcRenderer.on('tka:kamera-native-bingkai', h);
+      return () => ipcRenderer.removeListener('tka:kamera-native-bingkai', h);
+    },
+    padaBerhenti: (cb) => {
+      const h = (_e, token, info) => cb(token, info);
+      ipcRenderer.on('tka:kamera-native-berhenti', h);
+      return () => ipcRenderer.removeListener('tka:kamera-native-berhenti', h);
+    },
+  },
   /** Muat ulang server (dipakai halaman galat koneksi). */
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
   /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */

@@ -17,6 +17,7 @@
  * Batasan: Ctrl+Alt+Del tidak bisa diblokir oleh aplikasi apa pun di Windows.
  */
 const crypto = require('node:crypto');
+const { execFile, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session, systemPreferences } = require('electron');
@@ -43,7 +44,10 @@ app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 // Mode kamera (Windows). Chromium punya beberapa jalur penangkapan kamera; di sebagian laptop salah satunya
 // tidak mengirim gambar sama sekali walau lampu webcam menyala. Mode dipilih di layar persiapan, disimpan
 // di folder data aplikasi, dan berlaku setelah aplikasi dimulai ulang (flag Chromium hanya terbaca saat mulai).
-const MODE_KAMERA = ['standar', 'directshow', 'mf-tanpa-d3d11', 'tanpa-gpu'];
+const MODE_KAMERA = ['standar', 'native', 'directshow', 'mf-tanpa-d3d11', 'tanpa-gpu'];
+// Pembaca kamera native (desktop/kamera-native, ikut installer Windows sebagai extraResources).
+const BERKAS_KAMERA_NATIVE = path.join(process.resourcesPath, 'kamera-native', 'kamera-native.exe');
+const kameraNativeAda = () => process.platform === 'win32' && fs.existsSync(BERKAS_KAMERA_NATIVE);
 const berkasModeKamera = () => path.join(app.getPath('userData'), 'mode-kamera.json');
 function bacaModeKamera() {
   try {
@@ -53,7 +57,8 @@ function bacaModeKamera() {
     return 'standar';
   }
 }
-const modeKamera = process.platform === 'win32' ? bacaModeKamera() : 'standar';
+let modeKamera = process.platform === 'win32' ? bacaModeKamera() : 'standar';
+if (modeKamera === 'native' && !kameraNativeAda()) modeKamera = 'standar';
 if (modeKamera === 'directshow') {
   app.commandLine.appendSwitch('disable-features', 'MediaFoundationVideoCapture');
 } else if (modeKamera === 'mf-tanpa-d3d11') {
@@ -283,12 +288,13 @@ ipcMain.on('tka:masuk-kiosk', (e) => {
 
 ipcMain.handle('tka:mode-kamera', (e) => {
   if (e.sender !== jendela?.webContents) return null;
-  return { mode: modeKamera, daftar: process.platform === 'win32' ? MODE_KAMERA : ['standar'] };
+  return { mode: modeKamera, daftar: process.platform === 'win32' ? MODE_KAMERA.filter((m) => m !== 'native' || kameraNativeAda()) : ['standar'] };
 });
 
 /** Ganti mode kamera lalu mulai ulang aplikasi. Hanya di layar persiapan (belum mode kiosk/ujian). */
 ipcMain.handle('tka:ganti-mode-kamera', (e, mode) => {
   if (e.sender !== jendela?.webContents || kioskAktif || sedangUjian() || !MODE_KAMERA.includes(mode)) return false;
+  if (mode === 'native' && !kameraNativeAda()) return false;
   try {
     fs.mkdirSync(app.getPath('userData'), { recursive: true });
     fs.writeFileSync(berkasModeKamera(), JSON.stringify({ mode }));
@@ -301,6 +307,85 @@ ipcMain.handle('tka:ganti-mode-kamera', (e, mode) => {
   setTimeout(() => app.exit(0), 50);
   return true;
 });
+
+// ---------------------------------------------------------------------------
+// Kamera native: proses kamera-native.exe mengirim JPEG lewat stdout ([panjang int32 LE][JPEG]),
+// diteruskan ke halaman. Satu proses saja; token membedakan sesi agar sisa event sesi lama tidak terbaca.
+// ---------------------------------------------------------------------------
+let prosesKamera = null;
+function hentikanKameraNative() {
+  if (!prosesKamera) return;
+  try { prosesKamera.anak.kill(); } catch { /* sudah berhenti */ }
+  prosesKamera = null;
+}
+
+ipcMain.handle('tka:kamera-native-daftar', (e) => {
+  if (e.sender !== jendela?.webContents || !kameraNativeAda()) return [];
+  return new Promise((selesai) => {
+    execFile(BERKAS_KAMERA_NATIVE, ['--daftar'], { timeout: 20000, windowsHide: true, maxBuffer: 1 << 20 }, (err, stdout) => {
+      if (err) {
+        console.error('Daftar kamera native gagal', err);
+        return selesai([]);
+      }
+      try {
+        const d = JSON.parse(stdout);
+        selesai(Array.isArray(d) ? d.filter((x) => typeof x?.id === 'string').map((x) => ({ id: x.id, nama: String(x.nama ?? 'kamera') })) : []);
+      } catch {
+        selesai([]);
+      }
+    });
+  });
+});
+
+ipcMain.handle('tka:kamera-native-mulai', (e, id, token) => {
+  if (e.sender !== jendela?.webContents || !kameraNativeAda() || typeof id !== 'string' || typeof token !== 'string') return false;
+  hentikanKameraNative();
+  const anak = spawn(BERKAS_KAMERA_NATIVE, ['--kamera', id, '--lebar', '640', '--fps', '8'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const proses = { anak, token };
+  prosesKamera = proses;
+  const kirim = (kanal, data) => {
+    if (jendela && !jendela.isDestroyed()) jendela.webContents.send(kanal, token, data);
+  };
+  let sisa = Buffer.alloc(0);
+  anak.stdout.on('data', (potongan) => {
+    sisa = sisa.length ? Buffer.concat([sisa, potongan]) : potongan;
+    while (sisa.length >= 4) {
+      const panjang = sisa.readInt32LE(0);
+      if (panjang <= 0 || panjang > 20 * 1024 * 1024) {
+        anak.kill();
+        return;
+      }
+      if (sisa.length < 4 + panjang) break;
+      kirim('tka:kamera-native-bingkai', new Uint8Array(sisa.subarray(4, 4 + panjang)));
+      sisa = sisa.subarray(4 + panjang);
+    }
+  });
+  let galatTerakhir = '';
+  anak.stderr.setEncoding('utf8');
+  anak.stderr.on('data', (teks) => {
+    for (const baris of teks.split(/\r?\n/)) if (baris.startsWith('GALAT:')) galatTerakhir = baris.slice(6);
+  });
+  let sudahSelesai = false;
+  const selesai = (kode) => {
+    if (sudahSelesai) return;
+    sudahSelesai = true;
+    if (prosesKamera === proses) prosesKamera = null;
+    const [nama, ...pesan] = (galatTerakhir || `NotReadableError:Kamera native berhenti (kode ${kode})`).split(':');
+    kirim('tka:kamera-native-berhenti', { nama, pesan: pesan.join(':') });
+  };
+  anak.on('error', (err) => {
+    galatTerakhir = `NotReadableError:${err.message}`;
+    selesai(-1);
+  });
+  anak.on('exit', selesai);
+  return true;
+});
+
+ipcMain.handle('tka:kamera-native-henti', (e, token) => {
+  if (e.sender !== jendela?.webContents) return;
+  if (prosesKamera && (!token || prosesKamera.token === token)) hentikanKameraNative();
+});
+app.on('will-quit', hentikanKameraNative);
 
 ipcMain.on('tka:coba-lagi', (e) => {
   if (e.sender === jendela?.webContents) bukaServer();

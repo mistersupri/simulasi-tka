@@ -26,7 +26,13 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "kamera-native/publish/kamera-native.exe",
+          "to": "kamera-native/kamera-native.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
