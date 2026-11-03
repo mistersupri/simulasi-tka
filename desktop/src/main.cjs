@@ -18,7 +18,7 @@
  */
 const crypto = require('node:crypto');
 const path = require('node:path');
-const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session } = require('electron');
+const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session, systemPreferences } = require('electron');
 
 const konfigurasi = require('../konfigurasi.json');
 const SERVER = new URL(konfigurasi.server).origin;
@@ -219,6 +219,19 @@ ipcMain.handle('tka:tangkap-layar', async (e) => {
   } finally {
     lindungi(true);
     sedangMenangkap = false;
+  }
+});
+
+/**
+ * Status izin kamera di sistem operasi (Windows: Pengaturan > Privasi & keamanan > Kamera). Dipakai halaman ujian
+ * untuk menjelaskan bahwa Windows, bukan aplikasi, yang memblokir kamera.
+ */
+ipcMain.handle('tka:status-kamera', (e) => {
+  if (e.sender !== jendela?.webContents) return null;
+  try {
+    return systemPreferences.getMediaAccessStatus('camera');
+  } catch {
+    return null;
   }
 });
 

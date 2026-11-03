@@ -86,6 +86,22 @@ Buat kunci acak misalnya dengan `openssl rand -hex 24`.
    menerima selisih jam maksimal 10 menit.
 4. Disarankan: gunakan akun Windows khusus siswa yang bukan administrator.
 
+## Kamera tidak menyala di Windows
+
+Gejala: ujian berkamera mencatat pelanggaran **"Kamera tidak aktif"** atau layar kunci "Kamera harus menyala".
+Penyebab terbanyak bukan aplikasi, melainkan Windows atau perangkatnya. Kode galat asli kini tampil di layar kunci
+dan di catatan pelanggaran (menu Hasil > Detail), dan ujian berkamera **tidak dimulai** bila kamera gagal dites dulu.
+
+| Kode galat | Artinya | Perbaikan |
+|---|---|---|
+| `NotAllowedError` (aplikasi menampilkan "Windows memblokir akses kamera") | Windows menolak kamera untuk aplikasi desktop | **Pengaturan > Privasi & keamanan > Kamera**: nyalakan *Akses kamera*, *Izinkan aplikasi mengakses kamera Anda*, dan **Izinkan aplikasi desktop mengakses kamera**. Di komputer yang dikelola kebijakan (Group Policy `LetAppsAccessCamera`) minta administrator IT mengizinkan. |
+| `NotFoundError` | Tidak ada kamera yang terdeteksi | Periksa kabel USB webcam atau Device Manager (Cameras / Imaging devices). |
+| `NotReadableError` | Kamera dipakai aplikasi lain atau driver bermasalah | Tutup Zoom, Teams, aplikasi Kamera, atau tab browser yang memakai kamera; pasang ulang driver bila perlu. |
+
+Lakukan sekali per komputer lab **sebelum hari ujian** (pengaturan Windows tidak bisa dibuka dari jendela ujian yang terkunci).
+Baris "status Windows" di kode galat hanya muncul pada aplikasi versi terbaru; pengecekan kamera sebelum ujian dan kode
+galatnya bekerja dengan aplikasi versi lama setelah server diperbarui.
+
 ## Batasan yang perlu diketahui
 - **Ctrl+Alt+Del tidak bisa diblokir** oleh aplikasi apa pun di Windows. Alt+Tab dan tombol Windows
   tidak bisa dimatikan, hanya dibalas dengan merebut fokus kembali dan mencatat pelanggaran.

@@ -15,10 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProfilSiswa } from '@/hooks/useProfil';
-import { layarPenuhDidukung, masukLayarPenuh } from '@/hooks/usePengawasan';
+import { keluarLayarPenuh, layarPenuhDidukung, masukLayarPenuh } from '@/hooks/usePengawasan';
 import { rekamLayarDidukung } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
+import { jelaskanGalatKamera } from '@/lib/kamera';
+import { bukaKamera } from '@/lib/kameraPerangkat';
 import { formatTanggal } from '@/lib/format';
 import type { PaketUjian, ProfilSiswa, Riwayat, StatusUjian, UjianSiswa } from '@/lib/tipe';
 
@@ -278,6 +280,18 @@ function DialogMulai({ ujian, tutup }: { ujian: UjianSiswa | null; tutup: () => 
     mutationFn: async (u: UjianSiswa) => {
       // Layar penuh harus diminta langsung dari klik tombol (aturan browser).
       if (u.wajibLayarPenuh) await masukLayarPenuh();
+      // Kamera dicek SEBELUM ujian dimulai: bila bermasalah, waktu ujian belum berjalan dan penyebabnya jelas.
+      if (u.wajibKamera) {
+        try {
+          const tes = await bukaKamera();
+          tes.getTracks().forEach((t) => t.stop());
+        } catch (err) {
+          keluarLayarPenuh();
+          const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
+          const p = jelaskanGalatKamera(err as Error, { diAplikasi: !!aplikasi, statusOs });
+          throw new Error(`${p.judul}. ${p.isi} (Kode: ${p.detail})`);
+        }
+      }
       return api.post<PaketUjian>(`/siswa/ujian/${u.id}/mulai`, { token });
     },
     onSuccess: (paket) => {

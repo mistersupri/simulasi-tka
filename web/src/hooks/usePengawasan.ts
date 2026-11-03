@@ -14,6 +14,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aplikasi } from '@/lib/aplikasi';
+import { jelaskanGalatKamera, type PenjelasanKamera } from '@/lib/kamera';
+import { bukaKamera } from '@/lib/kameraPerangkat';
 import type { JenisPelanggaran } from '@/lib/tipe';
 
 export type Lapor = (jenis: JenisPelanggaran, detail?: string, foto?: Blob | null) => void;
@@ -179,6 +181,10 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
   const [status, setStatus] = useState<StatusKamera>('mati');
   const [jumlahWajah, setJumlahWajah] = useState<number | null>(null);
   const [percobaan, setPercobaan] = useState(0);
+  const [alasan, setAlasan] = useState<PenjelasanKamera | null>(null);
+  // Gagal menyalakan kamera dicatat sekali per ujian: menekan "Nyalakan kamera" berulang kali tidak boleh
+  // menambah pelanggaran (dan akhirnya mengirim ujian otomatis) hanya karena kameranya bermasalah.
+  const gagalDilaporkan = useRef(false);
   const laporRef = useRef(lapor);
   laporRef.current = lapor;
 
@@ -195,15 +201,23 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
     (async () => {
       setStatus('meminta');
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
-      } catch {
-        if (!berhenti) {
-          setStatus('ditolak');
-          laporRef.current('KAMERA_TIDAK_AKTIF', 'Izin kamera ditolak atau kamera tidak ada');
+        stream = await bukaKamera();
+      } catch (err) {
+        if (berhenti) return;
+        const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
+        const penjelasan = jelaskanGalatKamera(err as Error, { diAplikasi: !!aplikasi, statusOs });
+        setAlasan(penjelasan);
+        setStatus('ditolak');
+        if (!gagalDilaporkan.current) {
+          gagalDilaporkan.current = true;
+          // Detail memuat nama galat asli dan status Windows agar pengawas tahu penyebabnya.
+          laporRef.current('KAMERA_TIDAK_AKTIF', `Gagal menyalakan kamera: ${penjelasan.detail}`);
         }
         return;
       }
       if (berhenti) return;
+      gagalDilaporkan.current = false;
+      setAlasan(null);
       const video = videoRef.current;
       if (!video) return;
       video.srcObject = stream;
@@ -211,6 +225,11 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
       stream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (berhenti) return;
         setStatus('ditolak');
+        setAlasan({
+          jenis: 'dipakai', judul: 'Kamera terputus',
+          isi: 'Kamera berhenti: kabelnya terlepas atau aplikasi lain mengambil alih. Sambungkan kembali, tutup aplikasi lain yang memakai kamera, lalu coba lagi.',
+          detail: 'Kamera terputus',
+        });
         laporRef.current('KAMERA_TIDAK_AKTIF', 'Kamera terputus');
       });
 
@@ -271,5 +290,5 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
     };
   }, [aktif, percobaan]);
 
-  return { videoRef, status, jumlahWajah, cobaLagi };
+  return { videoRef, status, jumlahWajah, cobaLagi, alasan };
 }

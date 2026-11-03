@@ -19,6 +19,7 @@ import { api, ApiError, pesanGalat } from '@/lib/api';
 import { formatJam } from '@/lib/format';
 import { LABEL_PELANGGARAN, type HasilSiswa, type JenisPelanggaran, type PaketUjian, type SoalTampil } from '@/lib/tipe';
 import { atributLang } from '@/lib/bahasa';
+import type { PenjelasanKamera } from '@/lib/kamera';
 import { cn } from '@/lib/utils';
 
 const HURUF = ['A', 'B', 'C', 'D'];
@@ -303,6 +304,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
               aksi={kunci === 'kamera' ? kamera.cobaLagi : kunci === 'layar-penuh' ? () => masukLayarPenuh() : layar.mulaiBerbagi}
               jumlahPelanggaran={jumlahPelanggaran}
               maks={paket.ujian.maksPelanggaran}
+              alasan={kamera.alasan}
             />
           ) : (
             <section className="rounded-lg border border-garis bg-white p-5 sm:p-7" aria-labelledby="nomor-soal" lang={atributLang(soal.bahasa)}>
@@ -441,7 +443,7 @@ type JenisKunci = 'kamera' | 'bagikan-layar' | 'salah-pilih' | 'layar-penuh';
 const PESAN_KUNCI: Record<JenisKunci, { judul: string; isi: string; tombol: string }> = {
   'kamera': {
     judul: 'Kamera harus menyala',
-    isi: 'Ujian ini diawasi kamera. Izinkan akses kamera di browser, lalu tekan tombol di bawah.',
+    isi: 'Ujian ini diawasi kamera. Pastikan kamera terhubung dan diizinkan, lalu tekan tombol di bawah.',
     tombol: 'Nyalakan kamera',
   },
   'bagikan-layar': {
@@ -461,16 +463,18 @@ const PESAN_KUNCI: Record<JenisKunci, { judul: string; isi: string; tombol: stri
   },
 };
 
-function PenguncianLayar({ jenis, aksi, jumlahPelanggaran, maks }: {
-  jenis: JenisKunci; aksi: () => void; jumlahPelanggaran: number; maks: number;
+function PenguncianLayar({ jenis, aksi, jumlahPelanggaran, maks, alasan }: {
+  jenis: JenisKunci; aksi: () => void; jumlahPelanggaran: number; maks: number; alasan?: PenjelasanKamera | null;
 }) {
-  const pesan = PESAN_KUNCI[jenis];
+  // Kamera: tampilkan penyebab sebenarnya (diblokir Windows, dipakai aplikasi lain, tidak ada) beserta langkah perbaikannya.
+  const pesan = jenis === 'kamera' && alasan ? { ...PESAN_KUNCI.kamera, judul: alasan.judul, isi: alasan.isi } : PESAN_KUNCI[jenis];
   const Ikon = jenis === 'kamera' ? Camera : jenis === 'layar-penuh' ? ArrowsOut : Monitor;
   return (
     <section className="rounded-lg border border-garis bg-white p-6 text-center sm:p-10" role="alert">
       <Ikon className={cn('mx-auto size-12', jenis === 'kamera' || jenis === 'salah-pilih' ? 'text-merah' : 'text-biru')} />
       <h2 className="mt-4 text-xl">{pesan.judul}</h2>
       <p className="mx-auto mt-2 max-w-md text-muted-foreground">{pesan.isi}</p>
+      {jenis === 'kamera' && alasan && <p className="mx-auto mt-3 max-w-md text-xs break-words text-muted-foreground">Kode galat untuk pengawas: <code>{alasan.detail}</code></p>}
       {maks > 0 && <p className="mt-3 font-semibold text-merah">Pelanggaran tercatat: {jumlahPelanggaran} dari {maks}</p>}
       <Button size="lg" className="mt-6" onClick={aksi}>{pesan.tombol}</Button>
     </section>

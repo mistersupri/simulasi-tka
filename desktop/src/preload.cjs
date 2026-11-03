@@ -17,4 +17,6 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
   /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */
   tangkapLayar: () => ipcRenderer.invoke('tka:tangkap-layar'),
+  /** Status izin kamera di sistem operasi ("granted", "denied", ...). */
+  statusKamera: () => ipcRenderer.invoke('tka:status-kamera'),
 });

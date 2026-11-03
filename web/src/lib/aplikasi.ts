@@ -8,6 +8,11 @@ type JembatanAplikasi = {
   cobaLagi: () => void;
   /** Tangkapan seluruh layar (JPEG) oleh aplikasi, tanpa dialog berbagi layar. */
   tangkapLayar: () => Promise<Uint8Array | null>;
+  /**
+   * Status izin kamera di Windows: "granted", "denied", "not-determined", "restricted", atau "unknown".
+   * Tidak ada di aplikasi versi lama, jadi selalu diperiksa dulu sebelum dipanggil.
+   */
+  statusKamera?: () => Promise<string | null>;
 };
 
 declare global {
