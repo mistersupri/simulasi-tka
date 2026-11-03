@@ -4,8 +4,8 @@ export type ProfilSiswa = { jenis: 'siswa'; nama: string; kelas: string; usernam
 /** ADMIN = instansi (Sudin), OPERATOR & GURU = sekolah. */
 export type Peran = 'ADMIN' | 'OPERATOR' | 'GURU';
 export const LABEL_PERAN: Record<Peran, string> = { ADMIN: 'Admin instansi', OPERATOR: 'Operator sekolah', GURU: 'Guru' };
-export type ProfilStaf = { jenis: 'staf'; id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null };
-export type SekolahPilihan = { id: string; nama: string; npsn: string | null; aktif: boolean };
+export type ProfilStaf = { jenis: 'staf'; id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null; bolehBuatSoal: boolean };
+export type SekolahPilihan = { id: string; nama: string; npsn: string | null; aktif: boolean; bolehBuatSoal: boolean };
 export type Sekolah = SekolahPilihan & {
   alamat: string; dibuat: string; jumlahSiswa: number; jumlahOperator: number; jumlahGuru: number; jumlahHasil: number; rataRata: number | null;
 };

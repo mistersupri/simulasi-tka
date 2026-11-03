@@ -81,7 +81,7 @@ export default function HalamanSekolah() {
                   <TableCell className="text-right tabular-nums">{s.jumlahGuru}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.jumlahHasil}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.rataRata ?? '-'}</TableCell>
-                  <TableCell><Badge variant={s.aktif ? 'hijau' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
+                  <TableCell><Badge variant={s.aktif ? 'hijau' : 'default'}>{s.aktif ? 'Aktif' : 'Nonaktif'}</Badge>{!s.bolehBuatSoal && <Badge variant="default" className="ml-1.5">Tanpa bank soal</Badge>}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <Button size="icon-sm" variant="ghost" aria-label={`Ubah ${s.nama}`} onClick={() => setForm(s)}><PencilSimple /></Button>
@@ -152,7 +152,7 @@ export default function HalamanSekolah() {
 
 function FormSekolah({ sekolah, tutup }: { sekolah: Sekolah | null; tutup: () => void }) {
   const qc = useQueryClient();
-  const [d, setD] = useState({ nama: sekolah?.nama ?? '', npsn: sekolah?.npsn ?? '', alamat: sekolah?.alamat ?? '', aktif: sekolah?.aktif ?? true });
+  const [d, setD] = useState({ nama: sekolah?.nama ?? '', npsn: sekolah?.npsn ?? '', alamat: sekolah?.alamat ?? '', aktif: sekolah?.aktif ?? true, bolehBuatSoal: sekolah?.bolehBuatSoal ?? true });
   const [galat, setGalat] = useState('');
   const simpan = useMutation({
     mutationFn: () => sekolah ? api.put<{ pesan: string }>(`/admin/sekolah/${sekolah.id}`, d) : api.post<{ pesan: string }>('/admin/sekolah', d),
@@ -181,6 +181,13 @@ function FormSekolah({ sekolah, tutup }: { sekolah: Sekolah | null; tutup: () =>
               <div>
                 <Label htmlFor="k-aktif">Sekolah aktif</Label>
                 <p className="text-xs text-muted-foreground">Bila dinonaktifkan, siswa, guru, dan operator sekolah ini langsung keluar dan tidak bisa login.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Switch id="k-soal" checked={d.bolehBuatSoal} onCheckedChange={(v) => setD({ ...d, bolehBuatSoal: v })} className="mt-0.5" />
+              <div>
+                <Label htmlFor="k-soal">Boleh membuat bank soal sendiri</Label>
+                <p className="text-xs text-muted-foreground">Bila dimatikan, operator sekolah ini tidak bisa menambah, mengubah, atau mengimpor soal. Soal yang sudah ada tetap tersimpan.</p>
               </div>
             </div>
             {galat && <p role="alert" className="rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">{galat}</p>}

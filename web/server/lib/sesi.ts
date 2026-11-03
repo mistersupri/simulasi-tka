@@ -8,7 +8,7 @@ export const COOKIE = { SISWA: 'tka_siswa', STAF: 'tka_staf' } as const;
 
 export type SiswaSesi = { id: string; nisn: string; nama: string; kelas: string; username: string; sekolahId: string; namaSekolah: string };
 /** sekolahId null hanya untuk ADMIN (instansi). */
-export type Staf = { id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null };
+export type Staf = { id: string; nama: string; username: string; peran: Peran; sekolahId: string | null; namaSekolah: string | null; bolehBuatSoal: boolean };
 
 declare global {
   namespace Express {
@@ -73,6 +73,8 @@ export async function stafDariRequest(req: Request): Promise<Staf | null> {
   return {
     id: p.id, nama: p.nama, username: p.username, peran: p.peran,
     sekolahId: p.peran === 'ADMIN' ? null : p.sekolahId, namaSekolah: p.peran === 'ADMIN' ? null : (p.sekolah?.nama ?? null),
+    // Admin instansi selalu boleh; operator/guru mengikuti pengaturan sekolahnya.
+    bolehBuatSoal: p.peran === 'ADMIN' || !!p.sekolah?.bolehBuatSoal,
   };
 }
 

@@ -3,7 +3,7 @@
  * pemanggilan getUserMedia ada di kameraPerangkat.ts.
  */
 
-export type JenisGalatKamera = 'diblokir-windows' | 'ditolak' | 'tidak-ada' | 'dipakai' | 'lain';
+export type JenisGalatKamera = 'diblokir-windows' | 'ditolak' | 'tidak-ada' | 'dipakai' | 'hitam' | 'lain';
 export type PenjelasanKamera = {
   jenis: JenisGalatKamera;
   judul: string;

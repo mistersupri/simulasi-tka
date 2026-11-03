@@ -16,6 +16,13 @@ import { butuhStaf, sekolahStaf, type Staf } from '../../lib/sesi.ts';
  */
 export const rutAdminSoal = Router();
 rutAdminSoal.use(butuhStaf('ADMIN', 'OPERATOR'));
+// Sekolah yang tidak diberi izin membuat bank soal hanya boleh melihat (GET); semua perubahan ditolak.
+rutAdminSoal.use((req, _res, next) => {
+  if (req.method !== 'GET' && !req.staf!.bolehBuatSoal) {
+    throw galat(403, 'Sekolah Anda tidak diizinkan membuat atau mengubah bank soal. Hubungi admin instansi.');
+  }
+  next();
+});
 
 /** Pemilik soal yang sedang dikelola: operator = sekolahnya; admin = ?sekolahId= (kosong = instansi). */
 function pemilik(staf: Staf, pilihan: unknown): string | null {

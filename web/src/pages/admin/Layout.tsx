@@ -83,7 +83,7 @@ function Kerangka({ profil }: { profil: ProfilStaf }) {
       navigate('/admin', { replace: true });
     },
   });
-  const menu = MENU.filter((m) => m.peran.includes(profil.peran))
+  const menu = MENU.filter((m) => m.peran.includes(profil.peran) && !(m.ke === '/admin/soal' && !profil.bolehBuatSoal))
     .map((m) => ({ ...m, label: typeof m.label === 'string' ? m.label : (m.label[profil.peran] ?? '') }));
   const bolehHalaman = menu.some((m) => (m.akhir ? lokasi.pathname === m.ke : lokasi.pathname.startsWith(m.ke)));
 

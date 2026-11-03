@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera, type PenjelasanKamera } from '@/lib/kamera';
-import { bukaKamera } from '@/lib/kameraPerangkat';
+import { bukaKamera, jedaKamera, videoHitam } from '@/lib/kameraPerangkat';
 import type { JenisPelanggaran } from '@/lib/tipe';
 
 export type Lapor = (jenis: JenisPelanggaran, detail?: string, foto?: Blob | null) => void;
@@ -200,12 +200,14 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
 
     (async () => {
       setStatus('meminta');
-      try {
-        stream = await bukaKamera();
-      } catch (err) {
+      // Kamera baru saja dites/dilepas (halaman mulai ujian): beri Windows waktu melepasnya.
+      await jedaKamera();
+      if (berhenti) return;
+
+      const gagalKamera = async (err: Error | null, penjelasanLangsung?: PenjelasanKamera) => {
         if (berhenti) return;
         const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
-        const penjelasan = jelaskanGalatKamera(err as Error, { diAplikasi: !!aplikasi, statusOs });
+        const penjelasan = penjelasanLangsung ?? jelaskanGalatKamera(err, { diAplikasi: !!aplikasi, statusOs });
         setAlasan(penjelasan);
         setStatus('ditolak');
         if (!gagalDilaporkan.current) {
@@ -213,15 +215,55 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
           // Detail memuat nama galat asli dan status Windows agar pengawas tahu penyebabnya.
           laporRef.current('KAMERA_TIDAK_AKTIF', `Gagal menyalakan kamera: ${penjelasan.detail}`);
         }
+      };
+
+      const tampilkan = async (s: MediaStream) => {
+        // Elemen video bisa belum terpasang saat kamera selesai dibuka; tunggu sebentar, jangan menyerah diam-diam.
+        for (let i = 0; i < 20 && !videoRef.current && !berhenti; i++) await jedaKamera(100);
+        const v = videoRef.current;
+        if (!v || berhenti) return null;
+        v.srcObject = s;
+        await v.play().catch(() => {});
+        return v;
+      };
+
+      /** Hitam dua kali berturut-turut (jeda 1,5 detik) dianggap benar-benar hitam. */
+      const hitamTerus = async (v: HTMLVideoElement) => {
+        for (let i = 0; i < 2; i++) {
+          await jedaKamera(1500);
+          if (berhenti || !videoHitam(v)) return false;
+        }
+        return true;
+      };
+
+      let video: HTMLVideoElement | null = null;
+      try {
+        stream = await bukaKamera();
+        video = await tampilkan(stream);
+        if (video && (await hitamTerus(video))) {
+          // Coba sekali lagi tanpa syarat resolusi/arah kamera: sebagian driver mengirim bingkai kosong bila diminta 640x480.
+          stream.getTracks().forEach((t) => t.stop());
+          await jedaKamera(1000);
+          if (berhenti) return;
+          stream = await bukaKamera({ polos: true });
+          video = await tampilkan(stream);
+          if (video && (await hitamTerus(video))) {
+            await gagalKamera(null, {
+              jenis: 'hitam', judul: 'Gambar kamera hitam',
+              isi: 'Kamera menyala tetapi tidak mengirim gambar. Buka penutup lensa atau tombol privasi webcam, pastikan tidak ada aplikasi lain yang memakai kamera, '
+                + 'lalu coba lagi. Bila tetap hitam, cabut dan colok ulang webcam atau mulai ulang komputer.',
+              detail: 'Gambar kamera hitam (kamera menyala tanpa gambar)',
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        await gagalKamera(err as Error);
         return;
       }
-      if (berhenti) return;
+      if (berhenti || !stream || !video) return;
       gagalDilaporkan.current = false;
       setAlasan(null);
-      const video = videoRef.current;
-      if (!video) return;
-      video.srcObject = stream;
-      await video.play().catch(() => {});
       stream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (berhenti) return;
         setStatus('ditolak');

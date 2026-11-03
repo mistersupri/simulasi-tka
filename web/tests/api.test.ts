@@ -408,6 +408,31 @@ describe('soal & ujian sekolah, username per sekolah, impor sekolah, kunci login
     return { id, op };
   }
 
+  it('admin mematikan izin bank soal sekolah: operator tidak bisa menulis tetapi tetap bisa melihat; menu mengikuti profil', async () => {
+    const { admin, sekolahId } = await siapkan();
+    const op = request.agent(app);
+    await admin.post('/api/admin/pengguna').send({ nama: 'Op', username: 'opa', peran: 'OPERATOR', sekolahId, password: 'rahasia1' }).expect(200);
+    const masuk = await op.post('/api/auth/staf/login').send({ username: 'opa', password: 'rahasia1' }).expect(200);
+    expect(masuk.body.profil.bolehBuatSoal).toBe(true);
+    const soal = { mataPelajaran: 'Matematika', kelas: '6', pertanyaan: '1+1?', opsi: ['1', '2', '3', '4'], kunci: 'B' };
+    const id = (await op.post('/api/admin/soal').send(soal).expect(200)).body.id;
+
+    const sek = (await admin.get('/api/admin/sekolah').expect(200)).body.find((x: { id: string }) => x.id === sekolahId);
+    await admin.put(`/api/admin/sekolah/${sekolahId}`).send({ nama: sek.nama, npsn: sek.npsn ?? '', alamat: sek.alamat, aktif: true, bolehBuatSoal: false }).expect(200);
+
+    expect((await op.get('/api/auth/saya?jenis=staf').expect(200)).body.profil.bolehBuatSoal).toBe(false);
+    expect((await op.get('/api/admin/soal').expect(200)).body).toHaveLength(1);
+    await op.post('/api/admin/soal').send(soal).expect(403);
+    await op.put(`/api/admin/soal/${id}`).send(soal).expect(403);
+    await op.post('/api/admin/soal/hapus').send({ ids: [id] }).expect(403);
+    await op.post('/api/admin/soal/impor').send({ baris: [] }).expect(403);
+    // Admin tetap bisa mengelola soal sekolah itu.
+    await admin.post('/api/admin/soal').send({ ...soal, sekolahId }).expect(200);
+
+    await admin.put(`/api/admin/sekolah/${sekolahId}`).send({ nama: sek.nama, npsn: sek.npsn ?? '', alamat: sek.alamat, aktif: true, bolehBuatSoal: true }).expect(200);
+    await op.post('/api/admin/soal').send(soal).expect(200);
+  });
+
   it('operator membuat soal & ujian sekolah; soal instansi tidak terlihat; ujian instansi tidak bisa diubah', async () => {
     const { admin, siswa, ujianId, sekolahId } = await siapkan();
     const op = request.agent(app);

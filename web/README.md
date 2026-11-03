@@ -62,6 +62,9 @@ Pembatasan dilakukan di server (bukan hanya menu yang disembunyikan): operator d
 bisa membuka data sekolah lain walau mengubah alamat atau parameter permintaan.
 Sekolah yang dinonaktifkan langsung mengeluarkan semua siswa, guru, dan operatornya.
 
+- **Izin bank soal per sekolah.** Di Sekolah > Ubah, admin instansi bisa mematikan *Boleh membuat bank soal sendiri*.
+  Operator sekolah itu lalu tidak bisa menambah, mengubah, menghapus, atau mengimpor soal (menu Bank soal disembunyikan,
+  server menolak dengan 403); soal yang sudah ada tetap tersimpan. Bawaan: semua sekolah boleh.
 - **Ujian bersama vs ujian sekolah.** Ujian bersama dibuat admin instansi dan memakai bank soal
   instansi; soal ini tidak pernah terlihat oleh sekolah. Ujian sekolah dibuat operator, hanya untuk
   siswa sekolah itu, dan memakai bank soal sekolah itu (ID soal diawali NPSN, mis. `20100001-MTK001`).

@@ -84,6 +84,7 @@ rutAuth.post('/staf/login', async (req, res) => {
     profil: {
       jenis: 'staf', id: p.id, nama: p.nama, username: p.username, peran: p.peran,
       sekolahId: admin ? null : p.sekolahId, namaSekolah: admin ? null : (p.sekolah?.nama ?? null),
+      bolehBuatSoal: admin || !!p.sekolah?.bolehBuatSoal,
     },
   });
 });

@@ -17,7 +17,7 @@ rutAdminSekolah.get('/pilihan', butuhStaf(), async (req, res) => {
   const daftar = await prisma.sekolah.findMany({
     where: staf.peran === 'ADMIN' ? {} : { id: staf.sekolahId ?? '' },
     orderBy: { nama: 'asc' },
-    select: { id: true, nama: true, npsn: true, aktif: true },
+    select: { id: true, nama: true, npsn: true, aktif: true, bolehBuatSoal: true },
   });
   res.json(daftar);
 });
@@ -48,6 +48,7 @@ const skema = z.object({
   npsn: z.string().trim().default('').refine((v) => !v || /^\d{8}$/.test(v), 'NPSN harus 8 angka.').transform((v) => v || null),
   alamat: z.string().trim().max(300).default(''),
   aktif: z.boolean().default(true),
+  bolehBuatSoal: z.boolean().default(true),
 });
 
 async function npsnDipakai(npsn: string | null, kecuali?: string) {
@@ -74,7 +75,7 @@ rutAdminSekolah.put('/:id', async (req, res) => {
     // Keluarkan semua siswa, guru, dan operator sekolah itu.
     await prisma.sesiLogin.deleteMany({ where: { OR: [{ siswa: { sekolahId: id } }, { pengguna: { sekolahId: id } }] } });
   }
-  await catatLog(req.staf!, 'UBAH_SEKOLAH', `${s.nama}${d.aktif ? '' : ' (nonaktif)'}`);
+  await catatLog(req.staf!, 'UBAH_SEKOLAH', `${s.nama}${d.aktif ? '' : ' (nonaktif)'}${d.bolehBuatSoal ? '' : ' (tanpa bank soal sendiri)'}`);
   res.json({ pesan: 'Data sekolah diperbarui.' });
 });
 

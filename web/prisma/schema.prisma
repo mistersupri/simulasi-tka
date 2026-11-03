@@ -64,6 +64,7 @@ model Sekolah {
   nama     String
   alamat   String     @default("")
   aktif    Boolean    @default(true) // nonaktif = siswa, guru, dan operatornya tidak bisa login
+  bolehBuatSoal Boolean @default(true) // false = operator sekolah tidak bisa menambah/mengubah bank soal
   dibuat   DateTime   @default(now())
   pengguna Pengguna[]
   siswa    Siswa[]
