@@ -26,6 +26,16 @@ export const penanganGalat: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ pesan: 'Ukuran berkas terlalu besar.' });
     return;
   }
+  // Penyimpanan unggahan bermasalah (izin folder, disk penuh): pesan jelas untuk admin, detailnya ada di log server.
+  if (['EACCES', 'EPERM', 'EROFS', 'ENOSPC'].includes(err?.code)) {
+    console.error(err);
+    res.status(500).json({
+      pesan: err.code === 'ENOSPC'
+        ? 'Penyimpanan server penuh, berkas tidak dapat disimpan. Hubungi administrator server.'
+        : 'Folder penyimpanan di server tidak dapat ditulis, berkas tidak dapat disimpan. Hubungi administrator server (izin folder unggahan).',
+    });
+    return;
+  }
   if (err?.status === 404 || err?.code === 'ENOENT') {
     res.status(404).json({ pesan: 'Berkas tidak ditemukan.' });
     return;

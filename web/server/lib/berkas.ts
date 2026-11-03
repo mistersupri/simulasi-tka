@@ -48,3 +48,23 @@ export function kirimBerkas(res: Response, folder: Folder, nama: string, maxAge:
   pathBerkas(folder, nama);
   res.sendFile(nama, { root: path.join(config.uploadDir, folder), maxAge });
 }
+
+/**
+ * Memastikan folder unggahan bisa ditulis. Dipanggil saat server mulai agar masalah izin terlihat jelas
+ * di log sejak awal, bukan baru saat guru mengunggah gambar atau siswa mengirim foto bukti.
+ */
+export async function periksaFolderUnggah(): Promise<string | null> {
+  const folder = path.join(config.uploadDir, 'gambar');
+  try {
+    await fs.mkdir(folder, { recursive: true });
+    const uji = path.join(folder, `.uji-${process.pid}`);
+    await fs.writeFile(uji, '');
+    await fs.rm(uji, { force: true });
+    return null;
+  } catch (err) {
+    const kode = (err as NodeJS.ErrnoException).code;
+    return `Folder unggahan ${config.uploadDir} tidak bisa ditulis (${kode ?? 'galat'}). Gambar soal, logo, dan foto bukti pelanggaran akan gagal disimpan. ` +
+      'Docker: pastikan volume dapat ditulis user "node" (entrypoint image memperbaikinya otomatis bila container dijalankan sebagai root). ' +
+      'Tanpa Docker: jalankan `chown -R <user-server> ' + config.uploadDir + '`.';
+  }
+}

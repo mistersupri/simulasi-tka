@@ -100,12 +100,12 @@ dan nama instansi bisa diganti di Pengaturan.
 
 | Kebutuhan | Cara |
 |---|---|
-| **Rumus matematika** | LaTeX di antara `$...$` (dalam kalimat) atau `$$...$$` (satu baris sendiri), di pertanyaan, pilihan, dan pembahasan. Formulir soal punya tombol bantu (pecahan, akar, pangkat, dst.) dan pratinjau langsung. Dirender KaTeX di browser siswa. Tanda dolar biasa ("harga $5 dan $10") tidak dianggap rumus; tulis `\$` bila perlu. |
+| **Rumus matematika** | Dibuat **visual** di editor soal (seperti menulis di kertas): tombol *Rumus*, *a/b*, *√*, *xⁿ* menyisipkan kotak rumus dengan kotak putus-putus yang tinggal diisi; keyboard layar (angka, π, ∫, huruf Yunani) ada di ikon keyboard di dalam kotak; koma desimal ala Indonesia. Bisa di **pertanyaan, pilihan jawaban, dan pembahasan**. Tersimpan sebagai teks `$...$` / `$$...$$` (LaTeX), jadi impor Excel dan tampilan siswa (KaTeX) tidak berubah. Tanda dolar biasa ("harga $5 dan $10") tidak dianggap rumus. Editor (TipTap + MathLive) hanya dimuat di halaman admin. |
 | **Gambar pada soal dan pilihan** | Tiap pilihan boleh berupa teks, rumus, gambar, atau gabungannya; soal boleh hanya berupa gambar. Gambar ikut teracak bersama pilihannya. |
 | **Soal pemrograman** | Blok kode berpagar ` ```python ... ``` ` tampil berwarna (python, javascript, java, c, cpp, csharp, php, sql, html, css, bash, json, pascal). Siswa menjawab lewat pilihan ganda, atau tipe **Isian singkat/kode**: mengetik keluaran program atau potongan kode, dinilai otomatis dari daftar jawaban yang diterima (spasi dinormalkan; huruf besar/kecil dibedakan bila diatur). **Kode siswa tidak dijalankan di server.** |
 | **Bahasa asing** | Pilih bahasa soal (Arab, Mandarin, Jepang, Korea, Rusia, Hindi, Thai, Ibrani, Persia, Urdu, dan lainnya). Menentukan font; arah tulisan kanan-ke-kiri dikenali otomatis per teks, jadi soal Indonesia dengan pilihan Arab tampil benar. Siswa mengetik jawaban isian dengan keyboard bahasa itu. |
 
-**Impor berkas** (tombol *Impor berkas* di Bank soal; unduh template di dialognya):
+**Impor berkas** (tombol *Impor berkas* di Bank soal). Unduh **Template ZIP (dengan gambar)**: berisi `soal.xlsx` dengan contoh soal bergambar, folder `gambar/` berisi contoh gambar, dan petunjuk; ganti isinya lalu kompres lagi menjadi ZIP. Tersedia juga template Excel saja.
 - `.xlsx` saja: rumus LaTeX di sel; gambar boleh **ditempel di sel Excel** (kolom PERTANYAAN atau OPSI_A..D pada baris soalnya, gambar mengambang biasa, bukan "Place in Cell").
 - `.zip`: satu `.xlsx` dan gambar-gambarnya; kolom GAMBAR dan GAMBAR_A..D berisi nama berkas gambar.
 - Kolom tambahan: TIPE_SOAL (PG/PGK/ISIAN), BAHASA, PEKA_HURUF, KODE. Jawaban isian dipisah tanda `|` di kolom kunci.
@@ -135,11 +135,17 @@ npm run dev                   # API :3000 + Vite :5173 (buka http://localhost:51
 cd web
 cp .env.example .env          # isi DB_PASSWORD, ADMIN_PASSWORD
 docker compose up -d --build
-docker compose exec app npm run db:seed   # membuat akun admin pertama
+docker compose exec -u node app npm run db:seed   # membuat akun admin pertama
 ```
 
 Aplikasi berjalan di port 3000. Data tersimpan di volume `db` (PostgreSQL) dan
 `uploads` (gambar soal, logo, foto bukti pelanggaran).
+
+> **Izin folder unggahan.** Container dimulai sebagai root hanya untuk memperbaiki kepemilikan
+> `UPLOAD_DIR` (`/data/uploads`) lalu menjalankan aplikasi sebagai user `node`. Ini mencegah galat
+> `EACCES: permission denied, mkdir '/data/uploads/gambar'` pada volume atau bind mount yang dibuat
+> root (termasuk volume lama dan platform hosting). Bila tetap gagal, log menampilkan peringatan jelas
+> saat server mulai. Jalankan perintah manual dengan `docker compose exec -u node app ...`.
 
 ### Tanpa Docker
 
@@ -200,5 +206,5 @@ web/
 
 ```bash
 createdb simulasi_tka_test     # sekali saja
-npm test                       # 37 skenario: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor soal (rumus, gambar, ZIP), penguraian rumus/kode
+npm test                       # 48 skenario: login, ujian, pelanggaran, admin, sekolah & peran, ekspor, impor soal (rumus, gambar, ZIP, template), konversi editor, izin folder unggahan
 ```

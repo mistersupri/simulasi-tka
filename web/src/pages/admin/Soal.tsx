@@ -386,12 +386,13 @@ function DialogImporBerkas({ buka, setBuka, sekolahId }: { buka: boolean; setBuk
             <>
               <ul className="list-disc space-y-1.5 pl-5 text-sm">
                 <li><b>Rumus matematika:</b> tulis LaTeX di antara $...$, mis. <code className="rounded-sm bg-kode px-1">{'$\\frac{3}{4}$'}</code>. Bisa di pertanyaan, pilihan, dan pembahasan.</li>
-                <li><b>Gambar dari berkas:</b> isi kolom GAMBAR (soal) atau GAMBAR_A sampai GAMBAR_D (pilihan) dengan nama berkas, lalu kumpulkan Excel dan gambarnya dalam satu ZIP.</li>
+                <li><b>Gambar dari berkas:</b> isi kolom GAMBAR (soal) atau GAMBAR_A sampai GAMBAR_D (pilihan) dengan nama berkas, lalu kumpulkan Excel dan folder gambar dalam satu ZIP. <b>Template ZIP</b> sudah berisi contohnya, tinggal diganti.</li>
                 <li><b>Gambar ditempel di Excel:</b> letakkan gambar di sel kolom PERTANYAAN atau OPSI_A sampai OPSI_D pada baris soalnya (gambar mengambang biasa; tidak perlu ZIP). Cocok untuk rumus yang berupa gambar.</li>
                 <li><b>Kode program, soal isian, dan bahasa asing</b> (Arab, Mandarin, Rusia, dan lainnya): lihat contoh di template.</li>
               </ul>
               <div className="flex flex-wrap items-center gap-2">
-                <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href="/api/admin/soal/template.xlsx" download><DownloadSimple /> Unduh template Excel</a>
+                <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href="/api/admin/soal/template.zip" download title="Excel berisi contoh soal bergambar, folder gambar contoh, dan petunjuk"><DownloadSimple /> Template ZIP (dengan gambar)</a>
+                <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href="/api/admin/soal/template.xlsx" download><DownloadSimple /> Template Excel saja</a>
                 <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-white px-3 text-[13px] font-semibold hover:bg-muted focus-within:outline-3 focus-within:outline-biru">
                   <UploadSimple className="size-4" /> {berkas ? 'Ganti berkas' : 'Pilih berkas .xlsx atau .zip'}
                   <input type="file" accept=".xlsx,.zip" className="sr-only" onChange={(e) => { setBerkas(e.target.files?.[0] ?? null); e.target.value = ''; }} />

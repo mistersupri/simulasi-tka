@@ -1,10 +1,10 @@
 import { ImageSquare, Translate, Trash, UploadSimple } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { GambarSoal } from '@/components/GambarSoal';
-import { PenyuntingTeks } from '@/components/PenyuntingTeks';
-import { Teks } from '@/components/TeksKaya';
+import { diPerangkatMathLive } from '@/components/editor/mathlive';
+import { EditorTeks } from '@/components/editor/EditorTeks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { api, pesanGalat, urlGambar } from '@/lib/api';
 import { atributLang, DAFTAR_BAHASA, labelBahasa } from '@/lib/bahasa';
 import { perkecilGambar } from '@/lib/gambar';
-import { adaMarkup } from '@/lib/teksKaya';
 import type { Soal, TipeSoal } from '@/lib/tipe';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +57,8 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
   }));
   const [galat, setGalat] = useState('');
   const [mengunggah, setMengunggah] = useState(false);
+  // Keyboard layar MathLive dipasang di luar dialog; tutup bersama formulir.
+  useEffect(() => () => { window.mathVirtualKeyboard?.hide(); }, []);
   const ubah = <K extends keyof typeof d>(k: K, v: (typeof d)[K]) => setD((x) => ({ ...x, [k]: v }));
   const isian = d.tipe === 'ISIAN';
   const infoBahasa = DAFTAR_BAHASA.find((b) => b.kode === d.bahasa);
@@ -99,7 +100,16 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
 
   return (
     <Dialog open onOpenChange={(b) => !b && tutup()}>
-      <DialogContent lebar>
+      {/* Keyboard layar dan menu MathLive dipasang di luar dialog; mengkliknya tidak boleh menutup dialog. */}
+      <DialogContent
+        lebar
+        // Formulir soal panjang: klik di luar tidak menutupnya (isian tidak hilang tanpa sengaja). Tutup lewat X atau Batal.
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => { if (diPerangkatMathLive(e.target)) e.preventDefault(); }}
+        onInteractOutside={(e) => e.preventDefault()}
+        // Escape di dalam editor hanya keluar dari rumus/menutup keyboard layar, bukan menutup dialog.
+        onEscapeKeyDown={(e) => { if (e.target instanceof Element && (e.target.closest('.editor-teks') || diPerangkatMathLive(e.target))) e.preventDefault(); }}
+      >
         <form onSubmit={(e) => { e.preventDefault(); setGalat(''); simpan.mutate(); }} className="flex min-h-0 flex-col">
           <DialogHeader><DialogTitle>{soal ? `Ubah soal ${soal.id}` : 'Tambah soal'}</DialogTitle></DialogHeader>
           <DialogBody className="space-y-5">
@@ -142,10 +152,10 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
               </p>
             </div>
 
-            <PenyuntingTeks
-              id="s-tanya" label="Pertanyaan" value={d.pertanyaan} onChange={(v) => ubah('pertanyaan', v)} bahasa={d.bahasa}
-              required={!d.gambar} rows={5}
-              petunjuk="Rumus matematika: tombol Rumus atau ketik LaTeX di antara $...$ (satu baris sendiri: $$...$$). Kode program: tombol Kode. Boleh dikosongkan bila soal berupa gambar."
+            <EditorTeks
+              label="Pertanyaan" value={d.pertanyaan} onChange={(v) => ubah('pertanyaan', v)} bahasa={d.bahasa}
+              placeholder="Ketik pertanyaan. Klik Rumus untuk menulis rumus matematika, atau Kode untuk soal pemrograman."
+              petunjuk="Rumus dibuat langsung seperti menulis di kertas (pecahan, akar, pangkat); keyboard layar ada di dalam kotak rumus. Boleh dikosongkan bila soal berupa gambar."
             />
 
             <div className="space-y-1.5">
@@ -205,16 +215,16 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
                 <p className="text-xs text-muted-foreground">Setiap pilihan boleh berupa teks, rumus, gambar, atau gabungannya.</p>
                 {HURUF.map((h, i) => (
                   <div key={h} className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
                       <button
                         type="button" onClick={() => pilihKunci(h)} aria-pressed={d.kunci.includes(h)} aria-label={`Jadikan ${h} kunci jawaban`}
                         className={cn('grid size-11 shrink-0 place-content-center border font-semibold', d.tipe === 'PGK' ? 'rounded-md' : 'rounded-full',
                           d.kunci.includes(h) ? 'border-hijau bg-hijau text-white' : 'border-input bg-white')}
                       >{h}</button>
-                      <Input
-                        aria-label={`Opsi ${h}`} value={d.opsi[i]} lang={atributLang(d.bahasa)} dir="auto" className="min-w-0 flex-1"
-                        required={!d.opsiGambar[i]} placeholder={d.opsiGambar[i] ? 'Teks (opsional, ada gambar)' : undefined}
-                        onChange={(e) => ubah('opsi', d.opsi.map((o, j) => (j === i ? e.target.value : o)))}
+                      <EditorTeks
+                        ringkas labelTersembunyi className="min-w-0 flex-1" label={`Pilihan ${h}`} bahasa={d.bahasa}
+                        value={d.opsi[i]} onChange={(v) => ubah('opsi', d.opsi.map((o, j) => (j === i ? v : o)))}
+                        placeholder={d.opsiGambar[i] ? 'Teks (opsional, sudah ada gambar)' : `Pilihan ${h}: teks atau rumus`}
                       />
                       {d.opsiGambar[i] ? (
                         <span className="flex items-center gap-1">
@@ -234,9 +244,6 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
                         </label>
                       )}
                     </div>
-                    {adaMarkup(d.opsi[i]) && (
-                      <div className="ml-[3.25rem] rounded-md bg-latar px-3 py-1 text-sm" lang={atributLang(d.bahasa)}><Teks sebaris>{d.opsi[i]}</Teks></div>
-                    )}
                   </div>
                 ))}
               </fieldset>
@@ -244,9 +251,9 @@ export function FormSoal({ soal, sekolahId, daftarMapel, awalKelas, awalMapel, t
 
             <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
               <div className="space-y-1.5"><Label htmlFor="s-skor">Skor</Label><Input id="s-skor" type="number" min="0.5" step="0.5" value={d.skor} onChange={(e) => ubah('skor', e.target.value)} /></div>
-              <PenyuntingTeks
-                id="s-bahas" label="Pembahasan (opsional)" value={d.pembahasan} onChange={(v) => ubah('pembahasan', v)} bahasa={d.bahasa} rows={2}
-                placeholder="Tampil ke siswa bila ujian mengizinkan pembahasan"
+              <EditorTeks
+                label="Pembahasan (opsional)" value={d.pembahasan} onChange={(v) => ubah('pembahasan', v)} bahasa={d.bahasa} tinggiMin={4}
+                placeholder="Tampil ke siswa bila ujian mengizinkan pembahasan. Rumus bisa dipakai di sini."
               />
             </div>
             <Label className="font-semibold"><Switch checked={d.aktif} onCheckedChange={(v) => ubah('aktif', v)} /> Soal aktif (bisa muncul di ujian)</Label>

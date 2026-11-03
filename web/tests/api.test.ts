@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../server/config.ts';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../server/db.ts';
 import { tandaAplikasi } from '../server/lib/aplikasi.ts';
 import { app, jawabanBenar, kosongkanDb, siapkan } from './bantu.ts';
@@ -685,6 +685,69 @@ describe('soal isian, gambar pilihan, bahasa asing, impor berkas', () => {
     expect(r2.jumlah).toBe(10);
     expect(await prisma.soal.count({ where: { sekolahId } })).toBe(10);
     expect((await prisma.soal.findFirstOrThrow({ where: { sekolahId, mataPelajaran: 'Bahasa Arab' } })).id).toBe('20100001-BAR001');
+  });
+});
+
+describe('penyimpanan unggahan bermasalah', () => {
+  beforeEach(kosongkanDb);
+
+  it('izin folder ditolak (EACCES): pesan jelas untuk admin, bukan galat umum', async () => {
+    const { admin } = await siapkan();
+    const spy = vi.spyOn(fs.promises, 'mkdir').mockRejectedValueOnce(Object.assign(new Error("EACCES: permission denied, mkdir '/data/uploads/gambar'"), { code: 'EACCES', syscall: 'mkdir', errno: -13 }));
+    const r = await admin.post('/api/admin/logo').attach('logo', PNG, 'logo.png').expect(500);
+    expect(r.body.pesan).toMatch(/tidak dapat ditulis.*administrator server/);
+    spy.mockRestore();
+    await admin.post('/api/admin/logo').attach('logo', PNG, 'logo.png').expect(200);
+  });
+
+  it('pemeriksaan folder unggahan saat server mulai', async () => {
+    const { periksaFolderUnggah } = await import('../server/lib/berkas.ts');
+    expect(await periksaFolderUnggah()).toBeNull();
+    const spy = vi.spyOn(fs.promises, 'mkdir').mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+    expect(await periksaFolderUnggah()).toMatch(/tidak bisa ditulis \(EACCES\)/);
+    spy.mockRestore();
+  });
+});
+
+describe('template ZIP dengan gambar', () => {
+  beforeEach(kosongkanDb);
+
+  it('berisi soal.xlsx, gambar PNG yang sah, dan petunjuk; langsung bisa diimpor dengan semua gambarnya', async () => {
+    const { admin } = await siapkan();
+    const unduh = await admin.get('/api/admin/soal/template.zip').buffer(true)
+      .parse((res, cb) => { const d: Buffer[] = []; res.on('data', (c: Buffer) => d.push(c)); res.on('end', () => cb(null, Buffer.concat(d))); }).expect(200);
+    expect(unduh.headers['content-type']).toMatch(/zip/);
+    const zip = await JSZip.loadAsync(unduh.body);
+    expect(Object.keys(zip.files).sort()).toEqual(['BACA-SAYA.txt', 'gambar/', 'gambar/garis.png', 'gambar/lingkaran.png', 'gambar/persegi.png', 'gambar/segitiga.png', 'soal.xlsx']);
+    // Gambar contoh adalah PNG sungguhan dengan ukuran 160x120 dan memuat piksel berwarna (bukan kosong).
+    const png = await zip.file('gambar/segitiga.png')!.async('nodebuffer');
+    expect(png.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true);
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([160, 120]);
+    expect(await zip.file('BACA-SAYA.txt')!.async('string')).toMatch(/Klik|klik "Impor berkas"/);
+
+    const sebelum = fs.existsSync(path.join(config.uploadDir, 'gambar')) ? fs.readdirSync(path.join(config.uploadDir, 'gambar')).length : 0;
+    const r = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', unduh.body, 'template.zip').expect(200)).body;
+    expect(r.ditolak).toEqual([]);
+    expect(r.jumlah).toBe(13);
+    // Pilihan bergambar: lingkaran, persegi, segitiga, garis; kunci C.
+    const bergambar = await prisma.soal.findFirstOrThrow({ where: { pertanyaan: 'Manakah bangun datar yang memiliki tiga sisi?' } });
+    expect(bergambar.opsi).toEqual(['', '', '', '']);
+    expect(bergambar.opsiGambar.every((g) => /\.png$/.test(g))).toBe(true);
+    expect(bergambar.kunci).toBe('C');
+    // Soal yang seluruhnya gambar.
+    const hanyaGambar = await prisma.soal.findFirstOrThrow({ where: { pertanyaan: '', kunci: 'B', mataPelajaran: 'Matematika', gambar: { not: null } } });
+    expect(hanyaGambar.gambar).toMatch(/\.png$/);
+    // Gambar yang sama dipakai ulang antarsoal: 4 gambar pilihan + segitiga (dipakai bersama di pilihan C) + persegi (dipakai bersama) = 4 berkas.
+    const sesudah = fs.readdirSync(path.join(config.uploadDir, 'gambar')).length;
+    expect(sesudah - sebelum).toBe(4);
+  });
+
+  it('template Excel biasa tidak merujuk gambar (aman diimpor tanpa ZIP)', async () => {
+    const { admin } = await siapkan();
+    const unduh = await admin.get('/api/admin/soal/template.xlsx').buffer(true)
+      .parse((res, cb) => { const d: Buffer[] = []; res.on('data', (c: Buffer) => d.push(c)); res.on('end', () => cb(null, Buffer.concat(d))); }).expect(200);
+    const r = (await admin.post('/api/admin/soal/impor-berkas').attach('berkas', unduh.body, 'template.xlsx').expect(200)).body;
+    expect(r).toMatchObject({ jumlah: 10, ditolak: [] });
   });
 });
 

@@ -119,3 +119,28 @@ export function pecahTeks(s: string): Segmen[] {
 export const adaMarkup = (s: string) => pecahTeks(s).some((x) => x.t !== 'teks');
 export const adaRumus = (s: string) => pecahTeks(s).some((x) => x.t === 'rumus');
 export const adaBlokKode = (s: string) => pecahTeks(s).some((x) => x.t === 'blokKode');
+
+/**
+ * Rumus satu baris dan blok kode berdiri sendiri sebagai blok. Satu baris baru di kiri/kanannya
+ * (hasil mengetik rumus di baris sendiri) dibuang agar tidak ada jarak kosong ganda.
+ */
+export function rapikanBlok(segmen: Segmen[]): Segmen[] {
+  const blok = (x?: Segmen) => !!x && (x.t === 'blokKode' || (x.t === 'rumus' && x.blok));
+  return segmen
+    .map((x, i) => {
+      if (x.t !== 'teks') return x;
+      let isi = x.isi;
+      if (blok(segmen[i - 1])) isi = isi.replace(/^\n/, '');
+      if (blok(segmen[i + 1])) isi = isi.replace(/\n$/, '');
+      return { ...x, isi };
+    })
+    .filter((x) => x.t !== 'teks' || x.isi !== '');
+}
+
+/**
+ * Rumus yang belum selesai diisi di editor (kotak putus-putus, \placeholder) ditampilkan sebagai kotak kosong
+ * agar KaTeX tidak menolaknya.
+ */
+export const bersihkanRumus = (latex: string) => latex.replace(/\\placeholder(\[[^\]]*\])?\{[^{}]*\}/g, '\\square ');
+
+export const rumusBelumLengkap = (latex: string) => /\\placeholder(\[[^\]]*\])?\{/.test(latex);

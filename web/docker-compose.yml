@@ -1,5 +1,5 @@
 # Menjalankan aplikasi + PostgreSQL:  docker compose up -d --build
-# Lalu buat akun admin pertama:     docker compose exec app npm run db:seed
+# Lalu buat akun admin pertama:     docker compose exec -u node app npm run db:seed
 services:
   db:
     image: postgres:16

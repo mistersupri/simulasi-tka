@@ -3,11 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { buatApp } from './app.ts';
 import { config } from './config.ts';
 import { prisma } from './db.ts';
+import { periksaFolderUnggah } from './lib/berkas.ts';
 import { bersihkanTangkapanLama } from './lib/layar.ts';
 import { bersihkanGagalLogin } from './lib/sesi.ts';
 
 const folderKlien = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/client');
 const app = buatApp({ folderKlien });
+
+periksaFolderUnggah().then((masalah) => { if (masalah) console.error(`PERINGATAN: ${masalah}`); });
 
 const server = app.listen(config.port, () => {
   console.log(`Simulasi TKA berjalan di http://localhost:${config.port}`);

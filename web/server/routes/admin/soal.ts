@@ -4,7 +4,7 @@ import { prisma } from '../../db.ts';
 import { hapusBerkas, simpanGambar, unggah, unggahImpor } from '../../lib/berkas.ts';
 import { galat } from '../../lib/galat.ts';
 import { catatLog } from '../../lib/log.ts';
-import { bacaBerkasImpor, buatTemplateSoal, imporSoal, type BarisImpor } from '../../lib/imporSoal.ts';
+import { bacaBerkasImpor, buatTemplateSoal, buatTemplateZip, imporSoal, type BarisImpor } from '../../lib/imporSoal.ts';
 import { dataSoal, tentukanIdSoal } from '../../lib/soal.ts';
 import { butuhStaf, sekolahStaf, type Staf } from '../../lib/sesi.ts';
 
@@ -143,6 +143,12 @@ rutAdminSoal.post('/impor-berkas', unggahImpor.single('berkas'), async (req, res
   const laporan = await imporSoal(baris, sekolahId, sumber);
   if (laporan.jumlah) await catatLog(req.staf!, 'IMPOR_SOAL', `${laporan.jumlah} soal dari berkas`);
   res.json({ ...laporan, peringatan });
+});
+
+rutAdminSoal.get('/template.zip', async (_req, res) => {
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="template-soal-dengan-gambar.zip"');
+  res.send(await buatTemplateZip());
 });
 
 rutAdminSoal.get('/template.xlsx', async (_req, res) => {

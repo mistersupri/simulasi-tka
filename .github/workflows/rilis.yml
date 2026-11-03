@@ -272,7 +272,7 @@ jobs:
           \`\`\`bash
           cp env.example .env        # isi DB_PASSWORD, ADMIN_PASSWORD, KUNCI_APLIKASI, COOKIE_SECURE
           docker compose up -d
-          docker compose exec app npm run db:seed    # akun admin pertama
+          docker compose exec -u node app npm run db:seed    # akun admin pertama
           \`\`\`
           Image: \`${IMAGE}:${VERSI}\`
 

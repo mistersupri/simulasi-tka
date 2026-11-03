@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { pecahTeks, type Segmen } from '@/lib/teksKaya';
+import { bersihkanRumus, pecahTeks, rapikanBlok, type Segmen } from '@/lib/teksKaya';
 import { cn } from '@/lib/utils';
 
 type Katex = typeof import('katex').default;
@@ -22,28 +22,11 @@ function useMuat<T>(perlu: boolean, siap: () => T | null, muat: () => Promise<T>
   return modul;
 }
 
-/**
- * Rumus satu baris dan blok kode sudah berdiri sendiri sebagai blok. Satu baris baru di kiri/kanannya
- * (hasil mengetik rumus di baris sendiri) dibuang agar tidak ada jarak kosong ganda.
- */
-function rapikanBlok(segmen: Segmen[]): Segmen[] {
-  const blok = (x?: Segmen) => !!x && (x.t === 'blokKode' || (x.t === 'rumus' && x.blok));
-  return segmen
-    .map((x, i) => {
-      if (x.t !== 'teks') return x;
-      let isi = x.isi;
-      if (blok(segmen[i - 1])) isi = isi.replace(/^\n/, '');
-      if (blok(segmen[i + 1])) isi = isi.replace(/\n$/, '');
-      return { ...x, isi };
-    })
-    .filter((x) => x.t !== 'teks' || x.isi !== '');
-}
-
 function Rumus({ isi, blok, katex }: { isi: string; blok: boolean; katex: Katex | null }) {
   const html = useMemo(() => {
     if (!katex) return null;
     try {
-      return katex.renderToString(isi, {
+      return katex.renderToString(bersihkanRumus(isi), {
         displayMode: blok, throwOnError: false, strict: 'ignore', trust: false, maxSize: 20, maxExpand: 1000,
         output: 'htmlAndMathml', errorColor: '#b42318',
       });

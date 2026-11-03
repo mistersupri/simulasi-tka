@@ -11,6 +11,7 @@ import JSZip from 'jszip';
 import { config } from '../config.ts';
 import { prisma } from '../db.ts';
 import { hapusBerkas, simpanGambar } from './berkas.ts';
+import { gambarContoh } from './png.ts';
 import { galat } from './galat.ts';
 import { teksSel } from './imporExcel.ts';
 import { dataSoal, POLA_NAMA_GAMBAR, tentukanIdSoal } from './soal.ts';
@@ -270,7 +271,11 @@ export async function imporSoal(baris: BarisImpor[], sekolahId: string | null, s
 // Template Excel
 // ------------------------------------------------------------------
 
-export async function buatTemplateSoal(): Promise<Buffer> {
+/**
+ * denganGambar: tambahkan contoh soal yang merujuk berkas gambar (lingkaran.png, dst.).
+ * Berkasnya sendiri disediakan oleh buatTemplateZip.
+ */
+export async function buatTemplateSoal(denganGambar = false): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('SOAL');
   const judul = ['ID_SOAL', 'MATA_PELAJARAN', 'KELAS', 'TIPE_SOAL', 'BAHASA', 'PERTANYAAN', 'OPSI_A', 'OPSI_B', 'OPSI_C', 'OPSI_D',
@@ -288,7 +293,15 @@ export async function buatTemplateSoal(): Promise<Buffer> {
     ['', 'Informatika', '6', 'PG', 'id', 'Apa keluaran program berikut?\n```python\nfor i in range(3):\n    print(i)\n```', '1 2 3', '0 1 2', '0 1 2 3', '3', 'B', '1', 'range(3) menghasilkan 0, 1, 2.'],
     ['', 'Informatika', '6', 'ISIAN', 'id', 'Tulis keluaran program berikut:\n```python\nprint(2 + 3 * 4)\n```', '', '', '', '', '14', '1', 'Perkalian dikerjakan lebih dulu: 3 × 4 = 12, lalu 2 + 12 = 14.', 'YA', 'YA'],
   ];
-  for (const r of contoh) ws.addRow(r);
+  const gambarContohBaris: string[][] = [
+    // Setiap pilihan berupa gambar saja (OPSI kosong, GAMBAR_A..D terisi).
+    ['', 'Matematika', '6', 'PG', 'id', 'Manakah bangun datar yang memiliki tiga sisi?', '', '', '', '', 'C', '1', 'Segitiga memiliki tiga sisi.', '', '', '', 'lingkaran.png', 'persegi.png', 'segitiga.png', 'garis.png'],
+    // Gambar pada soal, pilihan berupa teks.
+    ['', 'Matematika', '6', 'PG', 'id', 'Perhatikan gambar berikut. Bangun apakah ini?', 'Lingkaran', 'Persegi', 'Segitiga', 'Garis', 'C', '1', '', '', '', 'segitiga.png', '', '', '', ''],
+    // Soal yang seluruhnya berupa gambar (PERTANYAAN kosong).
+    ['', 'Matematika', '6', 'PG', 'id', '', 'Segitiga', 'Persegi', 'Lingkaran', 'Garis', 'B', '1', '', '', '', 'persegi.png', '', '', '', ''],
+  ];
+  for (const r of denganGambar ? [...contoh, ...gambarContohBaris] : contoh) ws.addRow(r);
   ws.getRow(1).font = { bold: true };
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   judul.forEach((j, i) => { ws.getColumn(i + 1).width = j === 'PERTANYAAN' || j === 'PEMBAHASAN' ? 46 : j.startsWith('OPSI') ? 22 : j.startsWith('GAMBAR') ? 18 : 14; });
@@ -298,7 +311,7 @@ export async function buatTemplateSoal(): Promise<Buffer> {
   p.getColumn(1).width = 22;
   p.getColumn(2).width = 100;
   const baris: [string, string][] = [
-    ['Cara impor', 'Isi lembar SOAL (satu soal per baris, baris 1 jangan diubah), lalu unggah berkas .xlsx. Bila soal memakai gambar dari berkas, kumpulkan .xlsx dan semua gambar dalam satu berkas .zip, lalu unggah ZIP itu.'],
+    ['Cara impor', 'Isi lembar SOAL (satu soal per baris, baris 1 jangan diubah), lalu unggah berkas .xlsx. Bila soal memakai gambar dari berkas, kumpulkan .xlsx dan semua gambar dalam satu berkas .zip, lalu unggah ZIP itu. Template ZIP berisi contoh lengkapnya.'],
     ['TIPE_SOAL', 'PG (pilihan ganda), PGK (pilihan ganda kompleks, kunci lebih dari satu), atau ISIAN (siswa mengetik jawaban).'],
     ['KUNCI_JAWABAN', 'PG: satu huruf (B). PGK: beberapa huruf (A,C). ISIAN: jawaban yang diterima; beberapa jawaban dipisah tanda | (mis. 14|empat belas).'],
     ['BAHASA', 'Kode bahasa soal: id, en, ar (Arab), zh (Mandarin), zh-Hant, ja, ko, ru (Rusia), hi, th, he, fa, ur, de, fr, es, nl, pt, it, tr, el, vi, ms, jv, atau und (lain). Menentukan font; arah tulisan kanan-ke-kiri (Arab, Ibrani, Persia, Urdu) otomatis. Kosong = id.'],
@@ -314,4 +327,44 @@ export async function buatTemplateSoal(): Promise<Buffer> {
   p.eachRow((r) => r.eachCell((c) => { c.alignment = { wrapText: true, vertical: 'top' }; }));
 
   return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+const BACA_SAYA = `TEMPLATE IMPOR SOAL DENGAN GAMBAR
+==================================
+
+Isi berkas ini:
+  soal.xlsx     Daftar soal (lembar SOAL) dan petunjuk kolom (lembar PETUNJUK).
+  gambar/       Contoh gambar yang dirujuk soal.xlsx (lingkaran.png, persegi.png, segitiga.png, garis.png).
+
+Cara memakai:
+  1. Ganti isi soal.xlsx dengan soal Anda. Hapus baris contoh yang tidak dipakai.
+  2. Taruh semua gambar soal di folder gambar/ (nama berkas bebas, huruf besar/kecil tidak dibedakan).
+  3. Tulis nama berkas gambar di kolom GAMBAR (gambar soal) atau GAMBAR_A sampai GAMBAR_D (gambar pilihan jawaban).
+  4. Kompres soal.xlsx dan folder gambar/ menjadi satu berkas .zip (pilih keduanya, klik kanan, Kirim ke / Compress).
+  5. Di Bank soal, klik "Impor berkas", pilih ZIP itu, lalu klik Impor.
+
+Aturan gambar:
+  - Format PNG, JPG, GIF, atau WEBP, maksimal 5 MB per gambar.
+  - Pilihan jawaban boleh hanya berupa gambar (kolom OPSI dikosongkan).
+  - Soal boleh hanya berupa gambar (kolom PERTANYAAN dikosongkan).
+  - Gambar yang sama boleh dipakai banyak soal.
+  - Gambar rumus dari Word atau OneNote: simpan sebagai PNG, taruh di folder gambar/.
+
+Rumus matematika:
+  Tulis LaTeX di antara tanda dolar, mis. $\\frac{3}{4}$. Rumus bisa juga dibuat langsung di editor soal
+  (tombol Rumus) tanpa mengetik LaTeX; impor ini untuk soal dalam jumlah banyak.
+
+Tanpa ZIP:
+  Gambar boleh ditempel langsung di sel soal.xlsx (Insert, Pictures, This Device), letakkan di sel kolom
+  PERTANYAAN atau OPSI_A sampai OPSI_D pada baris soalnya, lalu unggah soal.xlsx saja.
+  Gunakan gambar mengambang biasa, bukan "Place in Cell".
+`;
+
+/** ZIP berisi soal.xlsx (dengan contoh soal bergambar), folder gambar/ berisi contoh gambar, dan petunjuk. */
+export async function buatTemplateZip(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('soal.xlsx', await buatTemplateSoal(true));
+  for (const bentuk of ['lingkaran', 'persegi', 'segitiga', 'garis'] as const) zip.file(`gambar/${bentuk}.png`, gambarContoh(bentuk));
+  zip.file('BACA-SAYA.txt', BACA_SAYA.replace(/\n/g, '\r\n'));
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
