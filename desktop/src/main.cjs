@@ -47,6 +47,10 @@ if (process.platform === 'win32' && process.env.TKA_KAMERA_MF !== '1') {
 }
 
 let jendela = null;
+/** Jendela utama baru masuk mode kiosk setelah layar persiapan selesai. */
+let kioskAktif = false;
+/** Percobaan: matikan proteksi tangkapan layar agar video kamera bisa tampil (lihat desktop/README.md). */
+const TANPA_PROTEKSI = process.env.TKA_TANPA_PROTEKSI === '1';
 let jendelaKeluar = null;
 let bolehTutup = false;
 let urlTerakhir = `${SERVER}/`;
@@ -215,7 +219,7 @@ ipcMain.handle('tka:tangkap-layar', async (e) => {
   if (e.sender !== jendela?.webContents || sedangMenangkap) return null;
   sedangMenangkap = true;
   const lindungi = (aktif) => {
-    if (jendela && !jendela.isDestroyed()) jendela.setContentProtection(aktif);
+    if (jendela && !jendela.isDestroyed()) jendela.setContentProtection(aktif && !TANPA_PROTEKSI);
     if (jendelaKeluar && !jendelaKeluar.isDestroyed()) jendelaKeluar.setContentProtection(aktif);
   };
   try {
@@ -250,17 +254,28 @@ ipcMain.handle('tka:status-kamera', (e) => {
   }
 });
 
+/** Layar persiapan selesai: jendela utama pindah ke mode kiosk (layar penuh, selalu di atas). */
+function masukKiosk() {
+  if (!jendela || jendela.isDestroyed() || kioskAktif || DEBUG) return;
+  kioskAktif = true;
+  jendela.setAlwaysOnTop(true, 'screen-saver');
+  jendela.setKiosk(true);
+}
+ipcMain.on('tka:masuk-kiosk', (e) => {
+  if (e.sender === jendela?.webContents) masukKiosk();
+});
+
 ipcMain.on('tka:coba-lagi', (e) => {
   if (e.sender === jendela?.webContents) bukaServer();
 });
 
 function buatJendela() {
   jendela = new BrowserWindow({
-    kiosk: !DEBUG,
-    fullscreen: !DEBUG,
+    kiosk: false,
+    fullscreen: false,
     width: 1280,
     height: 800,
-    frame: DEBUG,
+    frame: true,
     autoHideMenuBar: true,
     backgroundColor: '#F3F5F8',
     title: 'Ujian TKA',
@@ -275,8 +290,7 @@ function buatJendela() {
       additionalArguments: [`--tka-versi=${app.getVersion()}`],
     },
   });
-  if (!DEBUG) jendela.setAlwaysOnTop(true, 'screen-saver');
-  jendela.setContentProtection(true);
+  jendela.setContentProtection(!TANPA_PROTEKSI);
   jendela.once('ready-to-show', () => jendela.show());
 
   const wc = jendela.webContents;
@@ -321,7 +335,7 @@ function buatJendela() {
   });
   // Alt+Tab / tombol Windows: rebut fokus kembali. Halaman sendiri mencatatnya sebagai pindah tab.
   jendela.on('blur', () => {
-    if (DEBUG || jendelaKeluar || bolehTutup) return;
+    if (DEBUG || !kioskAktif || jendelaKeluar || bolehTutup) return;
     setTimeout(() => {
       if (!jendela || jendela.isDestroyed() || jendelaKeluar) return;
       jendela.show();
@@ -330,7 +344,7 @@ function buatJendela() {
     }, 150);
   });
   jendela.on('minimize', () => {
-    if (!DEBUG) jendela.restore();
+    if (kioskAktif) jendela.restore();
   });
 
   bukaServer(`${SERVER}/`);

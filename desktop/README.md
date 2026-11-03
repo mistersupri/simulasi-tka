@@ -88,6 +88,9 @@ Buat kunci acak misalnya dengan `openssl rand -hex 24`.
 
 ## Kamera tidak menyala di Windows
 
+**Percobaan layar hitam (v1.5.1+):** bila gambar kamera tetap hitam walau lampu webcam menyala, coba jalankan aplikasi dengan `TKA_TANPA_PROTEKSI=1`. Perlindungan tangkapan layar jendela dimatikan untuk tes ini; kalau gambar muncul, kabari pengembang. Contoh: `setx TKA_TANPA_PROTEKSI 1`, lalu tutup dan buka lagi aplikasi. Hapus dengan `reg delete HKCU\Environment /v TKA_TANPA_PROTEKSI /f`.
+
+
 Gejala: ujian berkamera mencatat pelanggaran **"Kamera tidak aktif"** atau layar kunci "Kamera harus menyala".
 Penyebab terbanyak bukan aplikasi, melainkan Windows atau perangkatnya. Kode galat asli kini tampil di layar kunci
 dan di catatan pelanggaran (menu Hasil > Detail), dan ujian berkamera **tidak dimulai** bila kamera gagal dites dulu.

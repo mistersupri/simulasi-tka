@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   keluar: () => ipcRenderer.send('tka:minta-keluar'),
   /** true selama jendela kata sandi pengawas terbuka: pengawasan halaman tidak mencatat. */
   jeda: () => jeda,
+  /** Layar persiapan selesai: pindah ke mode kiosk (layar penuh). */
+  masukKiosk: () => ipcRenderer.send('tka:masuk-kiosk'),
   /** Muat ulang server (dipakai halaman galat koneksi). */
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
   /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */

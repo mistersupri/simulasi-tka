@@ -6,6 +6,8 @@ type JembatanAplikasi = {
   /** true selama jendela izin pengawas terbuka; pelanggaran tidak dicatat. */
   jeda: () => boolean;
   cobaLagi: () => void;
+  /** Pindah ke mode kiosk (layar penuh). Dipanggil setelah layar persiapan. */
+  masukKiosk?: () => void;
   /** Tangkapan seluruh layar (JPEG) oleh aplikasi, tanpa dialog berbagi layar. */
   tangkapLayar: () => Promise<Uint8Array | null>;
   /**

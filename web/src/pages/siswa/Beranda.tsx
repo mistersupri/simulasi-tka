@@ -29,7 +29,7 @@ export function HalamanBeranda() {
   // Di aplikasi ujian, layar persiapan (koneksi, versi, kamera) tampil dulu sekali per menjalankan aplikasi.
   const [siap, setSiap] = useState(() => !aplikasi || sudahSiap());
   const profil = useProfilSiswa();
-  if (!siap) return <PersiapanAplikasi onLanjut={() => { tandaSiap(); setSiap(true); }} />;
+  if (!siap) return <PersiapanAplikasi onLanjut={() => { tandaSiap(); aplikasi?.masukKiosk?.(); setSiap(true); }} />;
   if (profil.isPending) return <Memuat className="min-h-dvh" />;
   if (profil.error && !(profil.error instanceof ApiError && profil.error.status === 401)) {
     return <main className="mx-auto max-w-md px-4 py-20"><Galat galat={profil.error} ulangi={() => profil.refetch()} /></main>;
