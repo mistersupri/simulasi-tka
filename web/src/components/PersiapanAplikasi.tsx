@@ -109,14 +109,14 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
     setTes('idle');
   }
 
-  /** Menyalakan kamera yang dipilih selama dua detik untuk memastikan gambarnya tidak hitam. Dibatasi 12 detik. */
+  /** Menyalakan kamera yang dipilih selama dua detik untuk memastikan gambarnya tidak hitam. Dibatasi 20 detik. */
   async function tesKamera() {
     setTes('memuat');
     setPesanKamera('');
     setInfoTes('');
     let s: MediaStream | null = null;
     try {
-      s = await bukaKameraDenganBatas({ deviceId: pilih }, 12000);
+      s = await bukaKameraDenganBatas({ deviceId: pilih }, 20000);
       const v = videoRef.current;
       if (!v) throw new Error('Pratinjau tidak tersedia.');
       v.srcObject = s;
@@ -137,7 +137,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
       setTes(videoHitam(v) ? 'hitam' : 'ok');
     } catch (err) {
       setTes('gagal');
-      setPesanKamera(err instanceof Error && err.message.startsWith('Timeout') ? 'Kamera tidak merespons dalam 12 detik.' : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
+      setPesanKamera(err instanceof Error && err.message.startsWith('Timeout') ? 'Kamera tidak merespons dalam 20 detik.' : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
     } finally {
       s?.getTracks().forEach((t) => t.stop());
       if (videoRef.current) videoRef.current.srcObject = null;
