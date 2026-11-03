@@ -47,6 +47,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const [statusKamera, setStatusKamera] = useState<'belum' | 'memuat' | 'siap' | 'gagal'>('belum');
   const [pesanKamera, setPesanKamera] = useState('');
   const [tes, setTes] = useState<StatusTes>('idle');
+  const [infoTes, setInfoTes] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   /** Izin kamera diminta sekali; setelah itu nama kamera terbaca dan bisa dipilih. */
@@ -87,6 +88,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   async function tesKamera() {
     setTes('memuat');
     setPesanKamera('');
+    setInfoTes('');
     let batal = false;
     let timer: number | undefined;
     let s: MediaStream | null = null;
@@ -102,8 +104,20 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
       const v = videoRef.current;
       if (!v) throw new Error('Pratinjau tidak tersedia.');
       v.srcObject = s;
+      // Hitung bingkai yang benar-benar sampai ke aplikasi: 0 berarti kamera tidak mengirim gambar.
+      let bingkai = 0;
+      let hitungAktif = true;
+      const hitung = () => {
+        if (!hitungAktif) return;
+        bingkai++;
+        v.requestVideoFrameCallback?.(hitung);
+      };
+      v.requestVideoFrameCallback?.(hitung);
       await v.play().catch(() => {});
       await jedaKamera(2000);
+      hitungAktif = false;
+      const ukuran = s.getVideoTracks()[0]?.getSettings();
+      setInfoTes(`Bingkai diterima: ${bingkai}. Ukuran: ${ukuran?.width ?? '?'}×${ukuran?.height ?? '?'}.`);
       setTes(videoHitam(v) ? 'hitam' : 'ok');
     } catch (err) {
       batal = true;
@@ -182,6 +196,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
                 </Button>
                 {tes === 'ok' && <span className="text-sm font-semibold text-hijau">Gambar terlihat.</span>}
                 {tes === 'hitam' && <span className="text-sm font-semibold text-merah">Gambar hitam. Pilih kamera lain, atau periksa penutup lensa webcam.</span>}
+                {infoTes && <span className="w-full text-xs text-muted-foreground">{infoTes}</span>}
                 {tes === 'gagal' && <span className="text-sm font-semibold text-merah">{pesanKamera || 'Kamera ini tidak bisa dibuka. Pilih kamera lain.'}</span>}
               </div>
               <video
