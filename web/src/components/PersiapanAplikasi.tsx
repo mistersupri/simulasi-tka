@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera } from '@/lib/kamera';
-import { bukaKamera, daftarKamera, jedaKamera, kameraInframerah, kameraPilihan, simpanKameraPilihan, videoHitam } from '@/lib/kameraPerangkat';
+import { bukaKameraDenganBatas, daftarKamera, jedaKamera, kameraInframerah, kameraPilihan, simpanKameraPilihan, videoHitam } from '@/lib/kameraPerangkat';
 import { cn } from '@/lib/utils';
 
 const KUNCI_SIAP = 'tka_siap';
@@ -79,7 +79,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
     setStatusKamera('memuat');
     setPesanKamera('');
     try {
-      const izin = await bukaKamera();
+      const izin = await bukaKameraDenganBatas();
       izin.getTracks().forEach((t) => t.stop());
       await jedaKamera();
       const daftar = await daftarKamera();
@@ -113,18 +113,9 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
     setTes('memuat');
     setPesanKamera('');
     setInfoTes('');
-    let batal = false;
-    let timer: number | undefined;
     let s: MediaStream | null = null;
-    const buka = bukaKamera({ deviceId: pilih }).then((st) => {
-      if (batal) st.getTracks().forEach((t) => t.stop());
-      return st;
-    });
-    const waktu = new Promise<never>((_, tolak) => {
-      timer = window.setTimeout(() => tolak(new Error('Kamera tidak merespons dalam 12 detik.')), 12000);
-    });
     try {
-      s = await Promise.race([buka, waktu]);
+      s = await bukaKameraDenganBatas({ deviceId: pilih }, 12000);
       const v = videoRef.current;
       if (!v) throw new Error('Pratinjau tidak tersedia.');
       v.srcObject = s;
@@ -144,11 +135,9 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
       setInfoTes(`Bingkai diterima: ${bingkai}. Ukuran: ${ukuran?.width ?? '?'}×${ukuran?.height ?? '?'}.${mode.data ? ` Mode: ${LABEL_MODE[mode.data.mode] ?? mode.data.mode}.` : ''}`);
       setTes(videoHitam(v) ? 'hitam' : 'ok');
     } catch (err) {
-      batal = true;
       setTes('gagal');
-      setPesanKamera(err instanceof Error && err.message.includes('12 detik') ? err.message : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
+      setPesanKamera(err instanceof Error && err.message.startsWith('Timeout') ? 'Kamera tidak merespons dalam 12 detik.' : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
     } finally {
-      window.clearTimeout(timer);
       s?.getTracks().forEach((t) => t.stop());
       if (videoRef.current) videoRef.current.srcObject = null;
     }

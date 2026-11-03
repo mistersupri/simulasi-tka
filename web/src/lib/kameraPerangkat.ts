@@ -65,6 +65,34 @@ export async function bukaKamera(opsi: { polos?: boolean; deviceId?: string } = 
   return cobaUlang(() => bukaSekali(opsi.polos, opsi.deviceId));
 }
 
+/**
+ * bukaKamera dengan batas waktu. Di sebagian perangkat getUserMedia menggantung tanpa pernah selesai
+ * (lampu webcam bahkan bisa menyala). Galatnya bernama AbortError dengan kata "Timeout" agar penjelasannya
+ * sama dengan galat timeout bawaan Chromium. Kamera yang terlambat terbuka langsung dimatikan.
+ */
+export function bukaKameraDenganBatas(opsi: { polos?: boolean; deviceId?: string } = {}, ms = 15000): Promise<MediaStream> {
+  return new Promise((selesai, gagal) => {
+    let habis = false;
+    const timer = setTimeout(() => {
+      habis = true;
+      const err = new Error(`Timeout: kamera tidak merespons dalam ${Math.round(ms / 1000)} detik`);
+      err.name = 'AbortError';
+      gagal(err);
+    }, ms);
+    bukaKamera(opsi).then(
+      (s) => {
+        clearTimeout(timer);
+        if (habis) s.getTracks().forEach((t) => t.stop());
+        else selesai(s);
+      },
+      (err) => {
+        clearTimeout(timer);
+        if (!habis) gagal(err);
+      },
+    );
+  });
+}
+
 /** Jeda pendek agar Windows sempat melepas kamera yang baru dimatikan sebelum dibuka lagi. */
 export const jedaKamera = (ms = 600) => tunggu(ms);
 

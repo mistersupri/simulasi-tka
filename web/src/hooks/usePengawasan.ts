@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera, type PenjelasanKamera } from '@/lib/kamera';
-import { bukaKamera, daftarKamera, jedaKamera, videoHitam } from '@/lib/kameraPerangkat';
+import { bukaKameraDenganBatas, daftarKamera, jedaKamera, videoHitam } from '@/lib/kameraPerangkat';
 import type { JenisPelanggaran } from '@/lib/tipe';
 
 export type Lapor = (jenis: JenisPelanggaran, detail?: string, foto?: Blob | null) => void;
@@ -246,7 +246,7 @@ export function useDeteksiWajah(aktif: boolean, lapor: Lapor) {
       let berhasil = false;
       for (let i = 0; i < kandidat.length && !berhasil; i++) {
         try {
-          stream = await bukaKamera({ deviceId: kandidat[i] });
+          stream = await bukaKameraDenganBatas({ deviceId: kandidat[i] });
           if (!diperluas) {
             diperluas = true;
             const label = stream.getVideoTracks()[0]?.label ?? '';

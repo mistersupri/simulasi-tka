@@ -21,7 +21,7 @@ import { rekamLayarDidukung } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera } from '@/lib/kamera';
-import { bukaKamera, daftarKamera } from '@/lib/kameraPerangkat';
+import { bukaKameraDenganBatas, daftarKamera } from '@/lib/kameraPerangkat';
 import { formatTanggal } from '@/lib/format';
 import type { PaketUjian, ProfilSiswa, Riwayat, StatusUjian, UjianSiswa } from '@/lib/tipe';
 
@@ -293,7 +293,7 @@ function DialogMulai({ ujian, tutup }: { ujian: UjianSiswa | null; tutup: () => 
           const id: (string | undefined)[] = [undefined];
           for (let i = 0; i < id.length && !terbuka; i++) {
             try {
-              const tes = await bukaKamera({ deviceId: id[i] });
+              const tes = await bukaKameraDenganBatas({ deviceId: id[i] });
               if (i === 0) id.push(...(await daftarKamera(tes.getVideoTracks()[0]?.getSettings().deviceId)).map((d) => d.id));
               tes.getTracks().forEach((t) => t.stop());
               terbuka = true;
