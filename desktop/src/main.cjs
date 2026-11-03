@@ -39,6 +39,13 @@ if (SERVER.startsWith('http://')) {
 // Aman di sini karena aplikasi hanya memuat server sekolah.
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 
+// Sebagian webcam di Windows gagal dibuka lewat Media Foundation ("AbortError: Timeout starting video
+// source") padahal jalan di Chrome. Pakai jalur DirectShow yang lebih kompatibel. Set TKA_KAMERA_MF=1
+// untuk kembali ke Media Foundation bila ada webcam yang justru bermasalah di DirectShow.
+if (process.platform === 'win32' && process.env.TKA_KAMERA_MF !== '1') {
+  app.commandLine.appendSwitch('disable-features', 'MediaFoundationVideoCapture');
+}
+
 let jendela = null;
 let jendelaKeluar = null;
 let bolehTutup = false;
