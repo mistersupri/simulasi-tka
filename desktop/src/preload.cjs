@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   jeda: () => jeda,
   /** Layar persiapan selesai: pindah ke mode kiosk (layar penuh). */
   masukKiosk: () => ipcRenderer.send('tka:masuk-kiosk'),
+  /** Mode penangkapan kamera saat ini dan daftar pilihannya (Windows). */
+  modeKamera: () => ipcRenderer.invoke('tka:mode-kamera'),
+  /** Simpan mode kamera lalu mulai ulang aplikasi. Hanya bisa di layar persiapan. */
+  gantiModeKamera: (mode) => ipcRenderer.invoke('tka:ganti-mode-kamera', mode),
   /** Muat ulang server (dipakai halaman galat koneksi). */
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
   /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */

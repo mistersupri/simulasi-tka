@@ -24,6 +24,13 @@ export function tandaSiap() {
 type InfoServer = { namaInstansi: string; versi?: string };
 type StatusTes = 'idle' | 'memuat' | 'ok' | 'hitam' | 'gagal';
 
+const LABEL_MODE: Record<string, string> = {
+  'standar': 'Standar (seperti Chrome)',
+  'directshow': 'DirectShow (webcam lama)',
+  'mf-tanpa-d3d11': 'Media Foundation tanpa akselerasi kamera',
+  'tanpa-gpu': 'Tanpa akselerasi GPU',
+};
+
 /** Layar pertama aplikasi ujian: koneksi ke server, kecocokan versi, dan pemilihan kamera. */
 export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const info = useQuery({
@@ -49,6 +56,23 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const [tes, setTes] = useState<StatusTes>('idle');
   const [infoTes, setInfoTes] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mode = useQuery({
+    queryKey: ['persiapan', 'mode-kamera'],
+    queryFn: async () => (await aplikasi?.modeKamera?.()) ?? null,
+    enabled: !!aplikasi?.modeKamera,
+    staleTime: Infinity,
+  });
+  const [modeBaru, setModeBaru] = useState('');
+  const [memulaiUlang, setMemulaiUlang] = useState(false);
+  async function terapkanMode() {
+    if (!modeBaru || !aplikasi?.gantiModeKamera) return;
+    setMemulaiUlang(true);
+    const ok = await aplikasi.gantiModeKamera(modeBaru).catch(() => false);
+    if (!ok) {
+      setMemulaiUlang(false);
+      setPesanKamera('Mode kamera gagal disimpan. Coba lagi.');
+    }
+  }
 
   /** Izin kamera diminta sekali; setelah itu nama kamera terbaca dan bisa dipilih. */
   async function aktifkanKamera() {
@@ -117,7 +141,7 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
       await jedaKamera(2000);
       hitungAktif = false;
       const ukuran = s.getVideoTracks()[0]?.getSettings();
-      setInfoTes(`Bingkai diterima: ${bingkai}. Ukuran: ${ukuran?.width ?? '?'}×${ukuran?.height ?? '?'}.`);
+      setInfoTes(`Bingkai diterima: ${bingkai}. Ukuran: ${ukuran?.width ?? '?'}×${ukuran?.height ?? '?'}.${mode.data ? ` Mode: ${LABEL_MODE[mode.data.mode] ?? mode.data.mode}.` : ''}`);
       setTes(videoHitam(v) ? 'hitam' : 'ok');
     } catch (err) {
       batal = true;
@@ -206,6 +230,27 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
                 aria-label="Pratinjau kamera"
                 className={cn('h-36 w-48 rounded-md bg-tinta object-cover -scale-x-100', tes === 'idle' && 'sr-only')}
               />
+            </div>
+          )}
+          {mode.data && mode.data.daftar.length > 1 && (
+            <div className="mt-4 space-y-1.5 border-t border-garis pt-4">
+              <Label htmlFor="pk-mode">Mode kamera aplikasi</Label>
+              <p className="text-xs text-muted-foreground">
+                Bila tes menunjukkan <b>Bingkai diterima: 0</b> atau gambar hitam di semua kamera, pilih mode lain. Aplikasi akan mulai ulang; pilihan tersimpan di komputer ini.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Select value={modeBaru || mode.data.mode} onValueChange={setModeBaru}>
+                  <SelectTrigger id="pk-mode" className="min-w-64 flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {mode.data.daftar.map((m) => (
+                      <SelectItem key={m} value={m}>{LABEL_MODE[m] ?? m}{m === mode.data!.mode ? ' (sedang dipakai)' : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={terapkanMode} disabled={memulaiUlang || !modeBaru || modeBaru === mode.data.mode}>
+                  {memulaiUlang ? <CircleNotch className="animate-spin" /> : <ArrowClockwise />} Terapkan & mulai ulang
+                </Button>
+              </div>
             </div>
           )}
           {pesanKamera && <p role="alert" className="mt-3 rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-merah">{pesanKamera}</p>}

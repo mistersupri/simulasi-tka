@@ -100,7 +100,7 @@ dan di catatan pelanggaran (menu Hasil > Detail), dan ujian berkamera **tidak di
 | `NotAllowedError` (aplikasi menampilkan "Windows memblokir akses kamera") | Windows menolak kamera untuk aplikasi desktop | **Pengaturan > Privasi & keamanan > Kamera**: nyalakan *Akses kamera*, *Izinkan aplikasi mengakses kamera Anda*, dan **Izinkan aplikasi desktop mengakses kamera**. Di komputer yang dikelola kebijakan (Group Policy `LetAppsAccessCamera`) minta administrator IT mengizinkan. |
 | `NotFoundError` | Tidak ada kamera yang terdeteksi | Periksa kabel USB webcam atau Device Manager (Cameras / Imaging devices). |
 | `NotReadableError` | Kamera dipakai aplikasi lain atau driver bermasalah | Tutup Zoom, Teams, aplikasi Kamera, atau tab browser yang memakai kamera; pasang ulang driver bila perlu. |
-| `AbortError: Timeout starting video source` (status Windows `granted`) | Webcam tidak merespons lewat Media Foundation | Sejak v1.3.4 aplikasi memakai DirectShow di Windows. Bila ada webcam yang justru bermasalah, jalankan aplikasi dengan variabel lingkungan `TKA_KAMERA_MF=1`. |
+| `AbortError: Timeout starting video source`, atau tes kamera **Bingkai diterima: 0** | Jalur penangkapan kamera Chromium tidak mengirim gambar di perangkat itu | Di layar persiapan, bagian Kamera, ganti **Mode kamera aplikasi** (Standar, DirectShow, Media Foundation tanpa akselerasi, Tanpa akselerasi GPU), aplikasi mulai ulang, lalu tes lagi. Pilihan tersimpan per komputer. |
 
 Lakukan sekali per komputer lab **sebelum hari ujian** (pengaturan Windows tidak bisa dibuka dari jendela ujian yang terkunci).
 Baris "status Windows" di kode galat hanya muncul pada aplikasi versi terbaru; pengecekan kamera sebelum ujian dan kode

@@ -17,6 +17,7 @@
  * Batasan: Ctrl+Alt+Del tidak bisa diblokir oleh aplikasi apa pun di Windows.
  */
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session, systemPreferences } = require('electron');
 
@@ -39,11 +40,26 @@ if (SERVER.startsWith('http://')) {
 // Aman di sini karena aplikasi hanya memuat server sekolah.
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 
-// Sebagian webcam di Windows gagal dibuka lewat Media Foundation ("AbortError: Timeout starting video
-// source") padahal jalan di Chrome. Pakai jalur DirectShow yang lebih kompatibel. Set TKA_KAMERA_MF=1
-// untuk kembali ke Media Foundation bila ada webcam yang justru bermasalah di DirectShow.
-if (process.platform === 'win32' && process.env.TKA_KAMERA_MF !== '1') {
+// Mode kamera (Windows). Chromium punya beberapa jalur penangkapan kamera; di sebagian laptop salah satunya
+// tidak mengirim gambar sama sekali walau lampu webcam menyala. Mode dipilih di layar persiapan, disimpan
+// di folder data aplikasi, dan berlaku setelah aplikasi dimulai ulang (flag Chromium hanya terbaca saat mulai).
+const MODE_KAMERA = ['standar', 'directshow', 'mf-tanpa-d3d11', 'tanpa-gpu'];
+const berkasModeKamera = () => path.join(app.getPath('userData'), 'mode-kamera.json');
+function bacaModeKamera() {
+  try {
+    const mode = JSON.parse(fs.readFileSync(berkasModeKamera(), 'utf8')).mode;
+    return MODE_KAMERA.includes(mode) ? mode : 'standar';
+  } catch {
+    return 'standar';
+  }
+}
+const modeKamera = process.platform === 'win32' ? bacaModeKamera() : 'standar';
+if (modeKamera === 'directshow') {
   app.commandLine.appendSwitch('disable-features', 'MediaFoundationVideoCapture');
+} else if (modeKamera === 'mf-tanpa-d3d11') {
+  app.commandLine.appendSwitch('disable-features', 'MediaFoundationD3D11VideoCapture,MediaFoundationD3D11VideoCaptureZeroCopy');
+} else if (modeKamera === 'tanpa-gpu') {
+  app.disableHardwareAcceleration();
 }
 
 let jendela = null;
@@ -263,6 +279,27 @@ function masukKiosk() {
 }
 ipcMain.on('tka:masuk-kiosk', (e) => {
   if (e.sender === jendela?.webContents) masukKiosk();
+});
+
+ipcMain.handle('tka:mode-kamera', (e) => {
+  if (e.sender !== jendela?.webContents) return null;
+  return { mode: modeKamera, daftar: process.platform === 'win32' ? MODE_KAMERA : ['standar'] };
+});
+
+/** Ganti mode kamera lalu mulai ulang aplikasi. Hanya di layar persiapan (belum mode kiosk/ujian). */
+ipcMain.handle('tka:ganti-mode-kamera', (e, mode) => {
+  if (e.sender !== jendela?.webContents || kioskAktif || sedangUjian() || !MODE_KAMERA.includes(mode)) return false;
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.writeFileSync(berkasModeKamera(), JSON.stringify({ mode }));
+  } catch (err) {
+    console.error('Gagal menyimpan mode kamera', err);
+    return false;
+  }
+  bolehTutup = true;
+  app.relaunch();
+  setTimeout(() => app.exit(0), 50);
+  return true;
 });
 
 ipcMain.on('tka:coba-lagi', (e) => {

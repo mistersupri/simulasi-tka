@@ -8,6 +8,10 @@ type JembatanAplikasi = {
   cobaLagi: () => void;
   /** Pindah ke mode kiosk (layar penuh). Dipanggil setelah layar persiapan. */
   masukKiosk?: () => void;
+  /** Mode penangkapan kamera (Windows) dan pilihannya. Tidak ada di aplikasi lama. */
+  modeKamera?: () => Promise<{ mode: string; daftar: string[] } | null>;
+  /** Simpan mode kamera lalu mulai ulang aplikasi. */
+  gantiModeKamera?: (mode: string) => Promise<boolean>;
   /** Tangkapan seluruh layar (JPEG) oleh aplikasi, tanpa dialog berbagi layar. */
   tangkapLayar: () => Promise<Uint8Array | null>;
   /**
