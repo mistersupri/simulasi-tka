@@ -25,7 +25,7 @@ export type SoalTampil = {
 };
 export type PaketUjian = {
   sesiId: string;
-  ujian: { id: string; nama: string; mataPelajaran: string; wajibLayarPenuh: boolean; wajibKamera: boolean; maksPelanggaran: number; intervalRekamLayar: number };
+  ujian: { id: string; nama: string; mataPelajaran: string; wajibLayarPenuh: boolean; wajibKamera: boolean; batasPeringatan: number; maksPelanggaran: number; intervalRekamLayar: number };
   soal: SoalTampil[];
   jawaban: Record<string, string>;
   ragu: string[];
@@ -67,7 +67,7 @@ export type Ujian = {
   id: string; nama: string; mataPelajaran: string; kelas: string[]; durasiMenit: number; jumlahSoal: number;
   waktuMulai: string | null; waktuSelesai: string | null; token: string | null; acakSoal: boolean; acakOpsi: boolean;
   tampilkanNilai: boolean; tampilkanPembahasan: boolean; maksPercobaan: number; wajibLayarPenuh: boolean;
-  wajibKamera: boolean; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; sekolah: string[];
+  wajibKamera: boolean; batasPeringatan: number; maksPelanggaran: number; wajibAplikasi: boolean; intervalRekamLayar: number; aktif: boolean; sekolah: string[];
   pemilikId: string | null; namaPemilik: string | null; bolehUbah: boolean; soalPerKelas: Record<string, number>; jumlahPeserta: number;
 };
 export type Siswa = {

@@ -3,7 +3,7 @@
  *
  * - Aplikasi Windows: layar diambil langsung oleh aplikasi (desktopCapturer), tanpa dialog.
  * - Browser komputer: siswa membagikan SELURUH LAYAR lewat getDisplayMedia. Berhenti berbagi
- *   dicatat sebagai pelanggaran dan soal disembunyikan sampai layar dibagikan lagi.
+ *   dicatat sebagai pelanggaran dan spanduk meminta layar dibagikan lagi (soal tetap tampil).
  * - HP/tablet: browser tidak mendukung berbagi layar, jadi ujian ini tidak bisa dikerjakan.
  *
  * Hanya gambar diam (JPEG kecil) yang dikirim, bukan video.

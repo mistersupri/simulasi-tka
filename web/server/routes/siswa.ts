@@ -114,6 +114,7 @@ async function paketUjian(sesi: SesiUjian, ujian: Ujian) {
       mataPelajaran: ujian.mataPelajaran,
       wajibLayarPenuh: ujian.wajibLayarPenuh,
       wajibKamera: ujian.wajibKamera,
+      batasPeringatan: ujian.batasPeringatan,
       maksPelanggaran: ujian.maksPelanggaran,
       intervalRekamLayar: ujian.intervalRekamLayar,
     },
@@ -254,7 +255,7 @@ const JENIS_PELANGGARAN: JenisPelanggaran[] = [
 
 /**
  * Laporan pelanggaran dari browser (multipart: jenis, detail, foto opsional).
- * Bila batas pelanggaran ujian tercapai, ujian dikirim otomatis.
+ * Pelanggaran tidak menghentikan pengerjaan; hanya saat batas maksimal tercapai ujian dihentikan dan dikirim.
  */
 rutSiswa.post('/sesi/:sesiId/pelanggaran', unggah.single('foto'), async (req, res) => {
   const sesi = await sesiMilik(req);

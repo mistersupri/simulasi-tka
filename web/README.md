@@ -25,12 +25,12 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 **Pengawasan ujian** (diatur per ujian)
 | Fitur | Cara kerja |
 |---|---|
-| Layar penuh | Ujian dibuka layar penuh. Bila siswa keluar, soal disembunyikan sampai ia kembali, dan kejadian itu dicatat sebagai pelanggaran. |
+| Layar penuh | Ujian dibuka layar penuh. Bila siswa keluar, kejadian itu dicatat sebagai pelanggaran dan spanduk mengajaknya kembali; soal tetap bisa dikerjakan. |
 | Tidak bisa blok/salin | Teks soal tidak bisa diblok. Salin, potong, tempel, klik kanan, seret, Ctrl+A/C/V/P/S/U, F12, dan PrintScreen dicegah dan dicatat. |
 | Pindah tab/aplikasi | Halaman tersembunyi atau jendela kehilangan fokus dicatat. |
 | Deteksi wajah | Kamera memeriksa wajah setiap detik di perangkat siswa. Tidak ada wajah selama ±4 detik, atau lebih dari satu wajah selama ±3 detik, dicatat bersama **foto bukti kecil**. Video tidak direkam dan tidak dikirim. |
-| Rekam layar | Tangkapan layar berkala (30 detik sampai 5 menit, diatur per ujian) dan sesaat setelah setiap pelanggaran, sehingga terlihat apa yang dibuka siswa saat pindah tab. Di browser, siswa wajib membagikan **seluruh layar**; berhenti berbagi menyembunyikan soal dan dicatat. Di aplikasi Windows layar diambil langsung tanpa dialog. Pengawas melihatnya di Monitor dan detail hasil. |
-| Kirim otomatis | Ujian dikirim otomatis pada pelanggaran ke-N (diatur guru; 0 = hanya dicatat). |
+| Rekam layar | Tangkapan layar berkala (30 detik sampai 5 menit, diatur per ujian) dan sesaat setelah setiap pelanggaran, sehingga terlihat apa yang dibuka siswa saat pindah tab. Di browser, siswa wajib membagikan **seluruh layar**; berhenti berbagi dicatat dan spanduk memintanya berbagi lagi. Di aplikasi Windows layar diambil langsung tanpa dialog. Pengawas melihatnya di Monitor dan detail hasil. |
+| Batas pelanggaran | Pelanggaran tidak menghentikan pengerjaan: siswa hanya mendapat notifikasi. Pada pelanggaran ke-5 (diatur per ujian) muncul peringatan yang wajib dikonfirmasi. Pada pelanggaran ke-10 (diatur per ujian) ujian dihentikan dan jawaban dikirim otomatis; siswa tidak bisa melanjutkan. 0 = tanpa peringatan / hanya dicatat. |
 | Wajib aplikasi | Ujian bisa dibatasi hanya lewat aplikasi ujian Windows ([`desktop/`](../desktop/README.md)), yang mengunci layar dan memblokir tangkapan layar. Butuh `KUNCI_APLIKASI` di server. |
 | Monitor | Guru melihat progres, sisa waktu, jumlah pelanggaran, dan foto bukti secara langsung; bisa menambah waktu, mengirim paksa, atau mereset. |
 

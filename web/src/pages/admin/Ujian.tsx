@@ -110,7 +110,8 @@ export default function HalamanUjian() {
                   {u.wajibKamera && <Badge><Camera /> Kamera</Badge>}
                   {u.wajibAplikasi && <Badge><Desktop /> Hanya aplikasi Windows</Badge>}
                   {u.intervalRekamLayar > 0 && <Badge><Monitor /> Rekam layar tiap {labelInterval(u.intervalRekamLayar)}</Badge>}
-                  {u.maksPelanggaran > 0 && <Badge>Kirim otomatis di pelanggaran ke-{u.maksPelanggaran}</Badge>}
+                  {u.batasPeringatan > 0 && <Badge>Peringatan di pelanggaran ke-{u.batasPeringatan}</Badge>}
+                  {u.maksPelanggaran > 0 && <Badge>Dihentikan di pelanggaran ke-{u.maksPelanggaran}</Badge>}
                 </div>
                 {u.bolehUbah && kekurangan.length > 0 && (
                   <p className="mt-3 rounded-md bg-merah-muda px-3 py-2 text-sm font-semibold text-merah">
@@ -173,7 +174,8 @@ function FormUjian({ admin, ujian, daftarMapel, aplikasiTersedia, tutup }: {
     maksPercobaan: String(ujian?.maksPercobaan ?? 1),
     wajibLayarPenuh: ujian?.wajibLayarPenuh ?? true,
     wajibKamera: ujian?.wajibKamera ?? false,
-    maksPelanggaran: String(ujian?.maksPelanggaran ?? 5),
+    batasPeringatan: String(ujian?.batasPeringatan ?? 5),
+    maksPelanggaran: String(ujian?.maksPelanggaran ?? 10),
     wajibAplikasi: ujian?.wajibAplikasi ?? false,
     intervalRekamLayar: String(ujian?.intervalRekamLayar ?? 0),
     aktif: ujian?.aktif ?? true,
@@ -241,7 +243,7 @@ function FormUjian({ admin, ujian, daftarMapel, aplikasiTersedia, tutup }: {
             <section className="rounded-lg border border-garis bg-latar p-4">
               <h3 className="text-base">Pengawasan</h3>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <Saklar id="u-penuh" label="Wajib layar penuh" ket="Keluar layar penuh atau pindah aplikasi dicatat; soal disembunyikan sampai kembali." checked={d.wajibLayarPenuh} ubah={(v) => ubah('wajibLayarPenuh', v)} />
+                <Saklar id="u-penuh" label="Wajib layar penuh" ket="Keluar layar penuh atau pindah aplikasi dicatat sebagai pelanggaran; soal tetap bisa dikerjakan." checked={d.wajibLayarPenuh} ubah={(v) => ubah('wajibLayarPenuh', v)} />
                 <Saklar id="u-kamera" label="Deteksi wajah dengan kamera" ket="Mencatat bila wajah tidak terlihat atau ada lebih dari satu wajah, disertai foto bukti." checked={d.wajibKamera} ubah={(v) => ubah('wajibKamera', v)} />
                 <Saklar
                   id="u-aplikasi" label="Wajib lewat aplikasi ujian Windows"
@@ -264,9 +266,14 @@ function FormUjian({ admin, ujian, daftarMapel, aplikasiTersedia, tutup }: {
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="u-maks-langgar">Kirim otomatis pada pelanggaran ke-</Label>
+                  <Label htmlFor="u-peringatan">Peringatan wajib dikonfirmasi pada pelanggaran ke-</Label>
+                  <Input id="u-peringatan" type="number" min={0} value={d.batasPeringatan} onChange={(e) => ubah('batasPeringatan', e.target.value)} className="max-w-32" />
+                  <p className="text-xs text-muted-foreground">Pelanggaran lain cukup berupa notifikasi; siswa tetap bisa mengerjakan. 0 = tanpa peringatan.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="u-maks-langgar">Ujian dihentikan pada pelanggaran ke-</Label>
                   <Input id="u-maks-langgar" type="number" min={0} value={d.maksPelanggaran} onChange={(e) => ubah('maksPelanggaran', e.target.value)} className="max-w-32" />
-                  <p className="text-xs text-muted-foreground">0 = hanya dicatat, tidak pernah dikirim otomatis.</p>
+                  <p className="text-xs text-muted-foreground">Jawaban dikirim otomatis dan siswa tidak bisa melanjutkan. 0 = hanya dicatat.</p>
                 </div>
               </div>
             </section>

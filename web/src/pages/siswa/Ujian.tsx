@@ -17,7 +17,7 @@ import {
 import { useRekamLayar } from '@/hooks/useRekamLayar';
 import { api, ApiError, pesanGalat } from '@/lib/api';
 import { formatJam } from '@/lib/format';
-import { LABEL_PELANGGARAN, type HasilSiswa, type JenisPelanggaran, type PaketUjian, type SoalTampil } from '@/lib/tipe';
+import { LABEL_PELANGGARAN, type HasilSiswa, type PaketUjian, type SoalTampil } from '@/lib/tipe';
 import { atributLang } from '@/lib/bahasa';
 import type { PenjelasanKamera } from '@/lib/kamera';
 import { cn } from '@/lib/utils';
@@ -41,7 +41,7 @@ export function HalamanUjian() {
   return <RuangUjian paket={paket.data} />;
 }
 
-type Peringatan = { jenis: JenisPelanggaran; jumlah: number; maks: number };
+type Peringatan = { jumlah: number; maks: number };
 
 function RuangUjian({ paket }: { paket: PaketUjian }) {
   const navigate = useNavigate();
@@ -63,7 +63,18 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
   const [ukuranHuruf, setUkuranHuruf] = useState(18);
   const [statusSimpan, setStatusSimpan] = useState('Jawaban tersimpan otomatis.');
   const [jumlahPelanggaran, setJumlahPelanggaran] = useState(paket.jumlahPelanggaran);
-  const [peringatan, setPeringatan] = useState<Peringatan | null>(null);
+  // Peringatan wajib dikonfirmasi saat jumlah pelanggaran mencapai batas peringatan ujian.
+  // Diingat per sesi agar memuat ulang halaman sebelum mengonfirmasi tetap menampilkannya.
+  const kunciKonfirmasi = `tka_peringatan_${paket.sesiId}`;
+  const [peringatan, setPeringatan] = useState<Peringatan | null>(() => {
+    const batas = paket.ujian.batasPeringatan;
+    if (batas <= 0 || paket.jumlahPelanggaran < batas) return null;
+    try {
+      if (localStorage.getItem(kunciKonfirmasi) === '1') return null;
+    } catch { /* tidak tersedia: tampilkan lagi */ }
+    return { jumlah: paket.jumlahPelanggaran, maks: paket.ujian.maksPelanggaran };
+  });
+  const jumlahPelanggaranRef = useRef(paket.jumlahPelanggaran);
   const [selesai, setSelesai] = useState(false);
 
   const kotor = useRef(false);
@@ -205,6 +216,7 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
   // ---------------- Pengawasan ----------------
   // Diisi setelah useRekamLayar: ambil tangkapan layar sesaat setelah pelanggaran.
   const tangkapLayarRef = useRef<(keterangan: string) => void>(() => {});
+  const batasPeringatanRef = useRef(paket.ujian.batasPeringatan);
   const laporKeServer = useCallback<Lapor>(async (jenis, detail, foto) => {
     const form = new FormData();
     form.append('jenis', jenis);
@@ -213,13 +225,24 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     if (foto) form.append('foto', foto, 'bukti.jpg');
     try {
       const r = await api.post<{ jumlah: number; maks: number; dihentikan: boolean; hasil?: HasilSiswa }>(`/siswa/sesi/${paket.sesiId}/pelanggaran`, form);
+      const sebelumnya = jumlahPelanggaranRef.current;
+      jumlahPelanggaranRef.current = Math.max(sebelumnya, r.jumlah);
       setJumlahPelanggaran(r.jumlah);
       if (r.dihentikan && r.hasil) {
-        toast.error('Batas pelanggaran tercapai. Ujian Anda dikirim otomatis.');
+        toast.error(`Ujian dihentikan karena mencapai ${r.maks} pelanggaran. Jawaban Anda sudah dikirim.`, { duration: 10000 });
         akhiri(r.hasil);
+        return;
+      }
+      tangkapLayarRef.current(LABEL_PELANGGARAN[jenis]);
+      // Pelanggaran tidak menghentikan pengerjaan: cukup notifikasi. Pada batas peringatan, peserta wajib mengonfirmasi.
+      const batas = batasPeringatanRef.current;
+      if (batas > 0 && sebelumnya < batas && r.jumlah >= batas) {
+        setPeringatan({ jumlah: r.jumlah, maks: r.maks });
       } else {
-        setPeringatan({ jenis, jumlah: r.jumlah, maks: r.maks });
-        tangkapLayarRef.current(LABEL_PELANGGARAN[jenis]);
+        toast.warning(`Pelanggaran tercatat: ${LABEL_PELANGGARAN[jenis]}`, {
+          description: r.maks > 0 ? `Pelanggaran ke-${r.jumlah} dari ${r.maks}. Pada pelanggaran ke-${r.maks} ujian dihentikan.` : `Pelanggaran ke-${r.jumlah}. Pengawas dapat melihat catatan ini.`,
+          duration: 6000,
+        });
       }
     } catch (err) {
       tanganiGalatSesi(err);
@@ -241,14 +264,14 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
     return () => window.removeEventListener('beforeunload', cegah);
   }, [selesai]);
 
-  // Urutan prioritas layar kunci: kamera, berbagi layar, layar penuh.
+  // Masalah pengawasan yang perlu diperbaiki peserta. Soal TETAP tampil; hanya spanduk di atas soal.
+  // Urutan prioritas: kamera, berbagi layar, layar penuh.
   const kunci: JenisKunci | null =
     paket.ujian.wajibKamera && kamera.status === 'ditolak' ? 'kamera'
     : rekamLayar && layar.status === 'perlu-izin' ? 'bagikan-layar'
     : rekamLayar && layar.status === 'salah-pilih' ? 'salah-pilih'
     : paket.ujian.wajibLayarPenuh && !diLayarPenuh ? 'layar-penuh'
     : null;
-  const terkunci = kunci !== null;
 
   const daftarNomor = useMemo(() => paket.soal.map((s, i) => ({
     i, id: s.id, terjawab: !!jawaban[s.id], ragu: ragu.includes(s.id),
@@ -298,15 +321,13 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
 
       <div className="mx-auto grid max-w-6xl gap-5 px-3 py-5 sm:px-4 lg:grid-cols-[1fr_280px]">
         <main className="min-w-0">
-          {terkunci ? (
-            <PenguncianLayar
+          {kunci && (
+            <SpandukPengawasan
               jenis={kunci}
               aksi={kunci === 'kamera' ? kamera.cobaLagi : kunci === 'layar-penuh' ? () => masukLayarPenuh() : layar.mulaiBerbagi}
-              jumlahPelanggaran={jumlahPelanggaran}
-              maks={paket.ujian.maksPelanggaran}
               alasan={kamera.alasan}
             />
-          ) : (
+          )}
             <section className="rounded-lg border border-garis bg-white p-5 sm:p-7" aria-labelledby="nomor-soal" lang={atributLang(soal.bahasa)}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 id="nomor-soal" className="rounded-sm bg-biru px-3 py-1 text-[15px] text-white">Soal nomor {indeks + 1}</h2>
@@ -370,7 +391,6 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
               </div>
               <p role="status" className="mt-4 text-sm text-muted-foreground">{statusSimpan}</p>
             </section>
-          )}
         </main>
 
         <aside
@@ -386,7 +406,6 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
               <button
                 key={n.id}
                 type="button"
-                disabled={terkunci}
                 onClick={() => { setIndeks(n.i); setPanelTerbuka(false); }}
                 aria-label={`Soal ${n.i + 1}${n.terjawab ? ', sudah dijawab' : ''}${n.ragu ? ', ragu-ragu' : ''}`}
                 aria-current={n.i === indeks ? 'step' : undefined}
@@ -405,13 +424,14 @@ function RuangUjian({ paket }: { paket: PaketUjian }) {
             <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border border-garis bg-kuning" /> Ragu-ragu</li>
             <li className="flex items-center gap-2"><span className="size-3.5 rounded-sm border border-input bg-white" /> Belum dijawab</li>
           </ul>
-          <Button variant="hijau" className="mt-5 w-full" onClick={mintaKirim} disabled={kirim.isPending || terkunci}>
+          <Button variant="hijau" className="mt-5 w-full" onClick={mintaKirim} disabled={kirim.isPending}>
             {kirim.isPending ? 'Mengirim...' : 'Selesai & kirim'}
           </Button>
         </aside>
       </div>
 
-      <DialogPeringatan peringatan={peringatan} tutup={() => {
+      <DialogPeringatan peringatan={peringatan} konfirmasi={() => {
+        try { localStorage.setItem(kunciKonfirmasi, '1'); } catch { /* tidak tersedia */ }
         setPeringatan(null);
         if (paket.ujian.wajibLayarPenuh) masukLayarPenuh();
       }} />
@@ -442,65 +462,63 @@ type JenisKunci = 'kamera' | 'bagikan-layar' | 'salah-pilih' | 'layar-penuh';
 
 const PESAN_KUNCI: Record<JenisKunci, { judul: string; isi: string; tombol: string }> = {
   'kamera': {
-    judul: 'Kamera harus menyala',
-    isi: 'Ujian ini diawasi kamera. Pastikan kamera terhubung dan diizinkan, lalu tekan tombol di bawah.',
+    judul: 'Kamera mati',
+    isi: 'Ujian ini diawasi kamera. Nyalakan kamera; selama mati, pengawas dapat melihat catatannya.',
     tombol: 'Nyalakan kamera',
   },
   'bagikan-layar': {
     judul: 'Bagikan seluruh layar',
-    isi: 'Ujian ini merekam layar secara berkala. Tekan tombol di bawah, pilih "Seluruh layar" (Entire screen), lalu tekan "Bagikan". Soal disembunyikan sampai layar dibagikan; waktu ujian tetap berjalan.',
+    isi: 'Ujian ini merekam layar secara berkala. Tekan tombol, pilih "Seluruh layar" (Entire screen), lalu "Bagikan".',
     tombol: 'Bagikan seluruh layar',
   },
   'salah-pilih': {
     judul: 'Pilih "Seluruh layar"',
-    isi: 'Yang Anda bagikan hanya satu tab atau jendela. Ujian ini memerlukan seluruh layar. Tekan tombol di bawah dan pilih "Seluruh layar" (Entire screen).',
+    isi: 'Yang Anda bagikan hanya satu tab atau jendela. Ujian ini memerlukan seluruh layar.',
     tombol: 'Pilih ulang',
   },
   'layar-penuh': {
-    judul: 'Kembali ke layar penuh',
-    isi: 'Soal disembunyikan selama Anda tidak berada di layar penuh. Waktu ujian tetap berjalan.',
+    judul: 'Anda keluar dari layar penuh',
+    isi: 'Kembali ke layar penuh. Keluar dari layar penuh tercatat sebagai pelanggaran.',
     tombol: 'Kembali ke layar penuh',
   },
 };
 
-function PenguncianLayar({ jenis, aksi, jumlahPelanggaran, maks, alasan }: {
-  jenis: JenisKunci; aksi: () => void; jumlahPelanggaran: number; maks: number; alasan?: PenjelasanKamera | null;
-}) {
+/** Masalah pengawasan yang perlu diperbaiki. Tidak menutup soal: peserta tetap bisa mengerjakan. */
+function SpandukPengawasan({ jenis, aksi, alasan }: { jenis: JenisKunci; aksi: () => void; alasan?: PenjelasanKamera | null }) {
   // Kamera: tampilkan penyebab sebenarnya (diblokir Windows, dipakai aplikasi lain, tidak ada) beserta langkah perbaikannya.
   const pesan = jenis === 'kamera' && alasan ? { ...PESAN_KUNCI.kamera, judul: alasan.judul, isi: alasan.isi } : PESAN_KUNCI[jenis];
   const Ikon = jenis === 'kamera' ? Camera : jenis === 'layar-penuh' ? ArrowsOut : Monitor;
   return (
-    <section className="rounded-lg border border-garis bg-white p-6 text-center sm:p-10" role="alert">
-      <Ikon className={cn('mx-auto size-12', jenis === 'kamera' || jenis === 'salah-pilih' ? 'text-merah' : 'text-biru')} />
-      <h2 className="mt-4 text-xl">{pesan.judul}</h2>
-      <p className="mx-auto mt-2 max-w-md text-muted-foreground">{pesan.isi}</p>
-      {jenis === 'kamera' && alasan && <p className="mx-auto mt-3 max-w-md text-xs break-words text-muted-foreground">Kode galat untuk pengawas: <code>{alasan.detail}</code></p>}
-      {maks > 0 && <p className="mt-3 font-semibold text-merah">Pelanggaran tercatat: {jumlahPelanggaran} dari {maks}</p>}
-      <Button size="lg" className="mt-6" onClick={aksi}>{pesan.tombol}</Button>
+    <section className="mb-4 flex flex-col gap-3 rounded-lg border border-kuning bg-kuning-muda p-4 sm:flex-row sm:items-center" role="alert">
+      <Ikon className="size-7 shrink-0 text-tinta" />
+      <div className="min-w-0 flex-1">
+        <h2 className="text-base">{pesan.judul}</h2>
+        <p className="text-sm text-tinta/80">{pesan.isi}</p>
+        {jenis === 'kamera' && alasan && <p className="mt-1 text-xs break-words text-tinta/70">Kode galat untuk pengawas: <code>{alasan.detail}</code></p>}
+      </div>
+      <Button className="shrink-0" onClick={aksi}>{pesan.tombol}</Button>
     </section>
   );
 }
 
-function DialogPeringatan({ peringatan, tutup }: { peringatan: Peringatan | null; tutup: () => void }) {
+/** Peringatan pada batas peringatan ujian: peserta wajib mengonfirmasi sebelum melanjutkan. */
+function DialogPeringatan({ peringatan, konfirmasi }: { peringatan: Peringatan | null; konfirmasi: () => void }) {
   if (!peringatan) return null;
   const sisa = peringatan.maks > 0 ? peringatan.maks - peringatan.jumlah : null;
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-tinta/60 p-4"
-      role="alertdialog" aria-modal="true" aria-labelledby="judul-peringatan"
-      onKeyDown={(e) => e.key === 'Escape' && tutup()}
-    >
+    <div className="fixed inset-0 z-50 grid place-items-center bg-tinta/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="judul-peringatan" aria-describedby="isi-peringatan">
       <div className="w-full max-w-md rounded-xl border border-garis bg-white p-6 text-center shadow-xl">
         <WarningOctagon weight="fill" className="mx-auto size-12 text-merah" />
-        <h2 id="judul-peringatan" className="mt-3 text-xl">Pelanggaran tercatat</h2>
-        <p className="mt-2 font-semibold">{LABEL_PELANGGARAN[peringatan.jenis]}</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Pengawas dapat melihat catatan ini.
-          {sisa !== null && (sisa > 0
-            ? ` Jika terjadi ${sisa} kali lagi, ujian Anda dikirim otomatis.`
-            : '')}
-        </p>
-        <Button size="lg" className="mt-6 w-full" autoFocus onClick={tutup}>Saya mengerti, lanjutkan</Button>
+        <h2 id="judul-peringatan" className="mt-3 text-xl">Peringatan: {peringatan.jumlah} pelanggaran</h2>
+        <div id="isi-peringatan" className="mt-2 space-y-2 text-sm text-muted-foreground">
+          <p>Anda sudah melakukan {peringatan.jumlah} pelanggaran selama ujian. Semua pelanggaran tercatat dan dapat dilihat pengawas.</p>
+          {sisa !== null && sisa > 0 && (
+            <p className="font-semibold text-merah">
+              Jika terjadi {sisa} pelanggaran lagi, ujian Anda dihentikan dan jawaban dikirim otomatis.
+            </p>
+          )}
+        </div>
+        <Button size="lg" className="mt-6 w-full" autoFocus onClick={konfirmasi}>Saya mengerti dan akan mematuhi aturan</Button>
       </div>
     </div>
   );

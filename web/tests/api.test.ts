@@ -131,6 +131,22 @@ describe('alur ujian siswa', () => {
     await siswa.post(`/api/siswa/sesi/${paket.sesiId}/pelanggaran`).field('jenis', 'TIDAK_ADA').expect(409);
   });
 
+  it('bawaan pelanggaran: peringatan di ke-5, dihentikan di ke-10; pelanggaran ke-5..9 tidak menghentikan', async () => {
+    const { admin, siswa } = await siapkan();
+    const { id } = (await admin.post('/api/admin/ujian').send({ nama: 'Bawaan', mataPelajaran: 'Matematika', kelas: '6' })).body;
+    const paket = (await siswa.post(`/api/siswa/ujian/${id}/mulai`).send({})).body;
+    expect(paket.ujian).toMatchObject({ batasPeringatan: 5, maksPelanggaran: 10 });
+    for (let i = 1; i <= 9; i++) {
+      const r = await siswa.post(`/api/siswa/sesi/${paket.sesiId}/pelanggaran`).field('jenis', 'PINDAH_TAB').expect(200);
+      expect(r.body).toMatchObject({ jumlah: i, maks: 10, dihentikan: false });
+    }
+    const r10 = await siswa.post(`/api/siswa/sesi/${paket.sesiId}/pelanggaran`).field('jenis', 'PINDAH_TAB').expect(200);
+    expect(r10.body.dihentikan).toBe(true);
+    expect(r10.body.hasil).toMatchObject({ status: 'PELANGGARAN', jumlahPelanggaran: 10 });
+    // Setelah dihentikan, peserta tidak bisa lagi mengirim jawaban atau melapor.
+    await siswa.post(`/api/siswa/sesi/${paket.sesiId}/kirim`).send({ jawaban: {}, ragu: [] }).expect(409);
+  });
+
   it('menolak jenis pelanggaran yang tidak dikenal', async () => {
     const { siswa, ujianId } = await siapkan();
     const paket = (await siswa.post(`/api/siswa/ujian/${ujianId}/mulai`).send({})).body;

@@ -174,7 +174,8 @@ model Ujian {
   maksPercobaan       Int       @default(1)  // 0 = tidak terbatas
   wajibLayarPenuh     Boolean   @default(true)
   wajibKamera         Boolean   @default(false)
-  maksPelanggaran     Int       @default(5)  // 0 = tidak dikirim otomatis
+  batasPeringatan     Int       @default(5)  // pelanggaran ke-n: peserta wajib mengonfirmasi peringatan; 0 = tanpa
+  maksPelanggaran     Int       @default(10) // pelanggaran ke-n: ujian dihentikan & dikirim; 0 = tidak pernah
   wajibAplikasi       Boolean   @default(false) // hanya lewat aplikasi ujian Windows
   intervalRekamLayar  Int       @default(0)     // detik antar tangkapan layar; 0 = tidak direkam
   aktif               Boolean   @default(true)
