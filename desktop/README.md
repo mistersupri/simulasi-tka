@@ -86,6 +86,21 @@ Buat kunci acak misalnya dengan `openssl rand -hex 24`.
    menerima selisih jam maksimal 10 menit.
 4. Disarankan: gunakan akun Windows khusus siswa yang bukan administrator.
 
+## Pembaruan otomatis (Windows)
+
+Sejak v1.8.0 aplikasi memperbarui dirinya dari **server sekolah**, tanpa internet:
+
+1. Rilis menaruh installer Windows di dalam image Docker dan paket server (`pembaruan/Ujian-TKA-Setup-<versi>.exe`).
+   Memperbarui server sekaligus menyediakan pembaruan aplikasi.
+2. Saat aplikasi dibuka, layar persiapan membandingkan versi aplikasi dengan server. Bila berbeda, aplikasi
+   mengunduh installer dari `/api/aplikasi/pembaruan` (hanya bisa dengan tanda aplikasi), memasangnya diam-diam,
+   lalu terbuka lagi dengan versi baru. Tidak pernah terjadi saat ujian berjalan.
+3. Installer dipasang untuk semua pengguna komputer (Program Files), jadi Windows bisa meminta **izin administrator**
+   saat memasang pembaruan. Di lab tanpa akun admin untuk siswa, pengawas perlu menyetujuinya sekali per pembaruan.
+
+Aplikasi versi lama (sebelum 1.8.0) belum punya fitur ini: pasang 1.8.0 secara manual sekali, setelah itu otomatis.
+Pembaruan otomatis hanya untuk Windows; aplikasi Linux tetap dipasang manual.
+
 ## Kamera tidak menyala di Windows
 
 **Percobaan layar hitam (v1.5.1+):** bila gambar kamera tetap hitam walau lampu webcam menyala, coba jalankan aplikasi dengan `TKA_TANPA_PROTEKSI=1`. Perlindungan tangkapan layar jendela dimatikan untuk tes ini; kalau gambar muncul, kabari pengembang. Contoh: `setx TKA_TANPA_PROTEKSI 1`, lalu tutup dan buka lagi aplikasi. Hapus dengan `reg delete HKCU\Environment /v TKA_TANPA_PROTEKSI /f`.

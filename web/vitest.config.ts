@@ -7,6 +7,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? 'postgresql://postgres@localhost:5432/simulasi_tka_test',
       UPLOAD_DIR: './node_modules/.tmp/uploads-tes',
+      PEMBARUAN_DIR: './node_modules/.tmp/pembaruan-tes',
       KUNCI_APLIKASI: 'kunci-rahasia-tes',
     },
     fileParallelism: false,

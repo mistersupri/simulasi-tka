@@ -890,3 +890,39 @@ describe('rekam layar', () => {
     expect(await prisma.tangkapanLayar.count()).toBe(0);
   });
 });
+
+describe('pembaruan otomatis aplikasi Windows', () => {
+  const menitIni = () => Math.floor(Date.now() / 60000);
+  const sah = () => tandaAplikasi('kunci-rahasia-tes', menitIni());
+
+  it('menyajikan latest.yml dan installer terbaru hanya untuk aplikasi ujian', async () => {
+    fs.rmSync(config.pembaruanDir, { recursive: true, force: true });
+    await request(app).get('/api/aplikasi/pembaruan/latest.yml').set('X-TKA-Aplikasi', sah()).expect(404);
+
+    fs.mkdirSync(config.pembaruanDir, { recursive: true });
+    const isi = Buffer.from('installer palsu untuk tes');
+    fs.writeFileSync(path.join(config.pembaruanDir, 'Ujian-TKA-Setup-1.9.0.exe'), 'versi lama');
+    fs.writeFileSync(path.join(config.pembaruanDir, 'Ujian-TKA-Setup-1.10.0.exe'), isi);
+    fs.writeFileSync(path.join(config.pembaruanDir, 'bukan-installer.exe'), 'abaikan');
+
+    // Tanpa tanda aplikasi: ditolak (installer membawa kunci aplikasi).
+    await request(app).get('/api/aplikasi/pembaruan/latest.yml').expect(403);
+    await request(app).get('/api/aplikasi/pembaruan/Ujian-TKA-Setup-1.10.0.exe').expect(403);
+
+    const yml = (await request(app).get('/api/aplikasi/pembaruan/latest.yml').set('X-TKA-Aplikasi', sah()).expect(200)).text;
+    const sha512 = (await import('node:crypto')).createHash('sha512').update(isi).digest('base64');
+    expect(yml).toContain('version: 1.10.0'); // 1.10.0 lebih baru dari 1.9.0 (urutan angka, bukan teks)
+    expect(yml).toContain(`sha512: ${sha512}`);
+    expect(yml).toContain(`size: ${isi.length}`);
+    expect(yml).toContain('path: Ujian-TKA-Setup-1.10.0.exe');
+
+    const unduh = await request(app).get('/api/aplikasi/pembaruan/Ujian-TKA-Setup-1.10.0.exe').set('X-TKA-Aplikasi', sah()).buffer(true)
+      .parse((res, cb) => { const b: Buffer[] = []; res.on('data', (c: Buffer) => b.push(c)); res.on('end', () => cb(null, Buffer.concat(b))); }).expect(200);
+    expect(Buffer.compare(unduh.body as Buffer, isi)).toBe(0);
+    // Hanya installer terbaru yang disajikan; berkas lain di folder tidak bisa diambil.
+    await request(app).get('/api/aplikasi/pembaruan/Ujian-TKA-Setup-1.9.0.exe').set('X-TKA-Aplikasi', sah()).expect(404);
+    await request(app).get('/api/aplikasi/pembaruan/bukan-installer.exe').set('X-TKA-Aplikasi', sah()).expect(404);
+    await request(app).get('/api/aplikasi/pembaruan/..%2F..%2Fpackage.json').set('X-TKA-Aplikasi', sah()).expect(404);
+    fs.rmSync(config.pembaruanDir, { recursive: true, force: true });
+  });
+});

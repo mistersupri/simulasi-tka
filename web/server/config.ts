@@ -5,6 +5,8 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: process.env.DATABASE_URL ?? '',
   uploadDir: path.resolve(process.env.UPLOAD_DIR ?? './uploads'),
+  // Installer aplikasi Windows untuk pembaruan otomatis (Ujian-TKA-Setup-<versi>.exe).
+  pembaruanDir: path.resolve(process.env.PEMBARUAN_DIR ?? './pembaruan'),
   produksi: process.env.NODE_ENV === 'production',
   // Cookie "Secure" hanya bila aplikasi diakses lewat HTTPS.
   cookieSecure: process.env.COOKIE_SECURE === 'true',

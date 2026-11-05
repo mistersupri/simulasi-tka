@@ -66,5 +66,8 @@
     "name": "Simulasi TKA",
     "email": "admin@simulasi-tka.invalid"
   },
-  "homepage": "https://github.com/mistersupri/simulasi-tka"
+  "homepage": "https://github.com/mistersupri/simulasi-tka",
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
 }

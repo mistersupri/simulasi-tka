@@ -23,6 +23,14 @@ const path = require('node:path');
 const { app, BrowserWindow, Menu, desktopCapturer, ipcMain, screen, session, systemPreferences } = require('electron');
 
 const konfigurasi = require('../konfigurasi.json');
+
+// Pembaruan otomatis (electron-updater) dari server sekolah. Tidak tersedia di build lama/pengembangan.
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require('electron-updater'));
+} catch {
+  autoUpdater = null;
+}
 const SERVER = new URL(konfigurasi.server).origin;
 const DEBUG = !app.isPackaged && process.env.TKA_DEBUG === '1';
 
@@ -265,6 +273,65 @@ function masukKiosk() {
 }
 ipcMain.on('tka:masuk-kiosk', (e) => {
   if (e.sender === jendela?.webContents) masukKiosk();
+});
+
+// ---------------------------------------------------------------------------
+// Pembaruan otomatis: installer terbaru disajikan server sekolah di /api/aplikasi/pembaruan
+// (latest.yml + Ujian-TKA-Setup-<versi>.exe). Dipicu dari layar persiapan bila versi aplikasi berbeda
+// dengan server; tidak pernah saat mode kiosk/ujian.
+// ---------------------------------------------------------------------------
+let pembaruanSiap = false;
+function pembaru() {
+  if (!autoUpdater || !app.isPackaged || process.platform !== 'win32') return null;
+  if (!pembaruanSiap) {
+    pembaruanSiap = true;
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    // Versi aplikasi harus sama dengan server, termasuk bila server justru lebih lama.
+    autoUpdater.allowDowngrade = true;
+    autoUpdater.setFeedURL({ provider: 'generic', url: `${SERVER}/api/aplikasi/pembaruan` });
+    autoUpdater.on('download-progress', (p) => {
+      if (jendela && !jendela.isDestroyed()) jendela.webContents.send('tka:pembaruan-progres', Math.round(p.percent ?? 0));
+    });
+  }
+  // Tanda aplikasi berganti tiap menit: perbarui sebelum setiap permintaan.
+  autoUpdater.requestHeaders = konfigurasi.kunciAplikasi ? { 'X-TKA-Aplikasi': tandaAplikasi() } : null;
+  return autoUpdater;
+}
+const bolehPerbarui = (e) => e.sender === jendela?.webContents && !kioskAktif && !sedangUjian();
+
+ipcMain.handle('tka:pembaruan-cek', async (e) => {
+  if (!bolehPerbarui(e)) return { didukung: false };
+  const u = pembaru();
+  if (!u) return { didukung: false };
+  try {
+    const r = await u.checkForUpdates();
+    const versi = r?.updateInfo?.version ?? null;
+    return { didukung: true, versi, ada: !!versi && versi !== app.getVersion() };
+  } catch (err) {
+    return { didukung: true, galat: String(err?.message ?? err).slice(0, 300) };
+  }
+});
+
+ipcMain.handle('tka:pembaruan-unduh', async (e) => {
+  if (!bolehPerbarui(e)) return { ok: false, galat: 'Pembaruan hanya bisa di layar persiapan.' };
+  const u = pembaru();
+  if (!u) return { ok: false, galat: 'Pembaruan otomatis tidak tersedia di aplikasi ini.' };
+  try {
+    await u.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, galat: String(err?.message ?? err).slice(0, 300) };
+  }
+});
+
+ipcMain.handle('tka:pembaruan-pasang', (e) => {
+  if (!bolehPerbarui(e) || !autoUpdater) return false;
+  bolehTutup = true;
+  hentikanKameraNative();
+  // Pasang diam-diam lalu jalankan lagi aplikasinya.
+  setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  return true;
 });
 
 ipcMain.handle('tka:mode-kamera', (e) => {

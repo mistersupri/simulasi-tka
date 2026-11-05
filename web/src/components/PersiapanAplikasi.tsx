@@ -22,6 +22,10 @@ export function tandaSiap() {
 
 type InfoServer = { namaInstansi: string; versi?: string };
 type StatusPratinjau = 'mati' | 'memuat' | 'ok' | 'hitam' | 'gagal';
+type StatusPembaruan =
+  | { tahap: 'diam' | 'cek' | 'pasang' | 'tidak-didukung' }
+  | { tahap: 'unduh'; persen: number }
+  | { tahap: 'gagal'; pesan: string };
 
 async function pesanGalatKamera(err: unknown) {
   const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
@@ -46,6 +50,47 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const versiServer = info.data?.data.versi ?? '';
   const versiCocok = !!versiApp && versiApp === versiServer;
   const siapLanjut = info.isSuccess && versiCocok;
+
+  // ---------------- Pembaruan otomatis ----------------
+  // Versi berbeda dengan server: unduh installer dari server sekolah, pasang diam-diam, aplikasi mulai ulang.
+  const [pembaruan, setPembaruan] = useState<StatusPembaruan>({ tahap: 'diam' });
+  const [ulangPembaruan, setUlangPembaruan] = useState(0);
+  const perluPembaruan = info.isSuccess && !!versiServer && !versiCocok;
+  useEffect(() => {
+    if (!perluPembaruan) return;
+    const p = aplikasi?.pembaruan;
+    if (!p) {
+      setPembaruan({ tahap: 'tidak-didukung' });
+      return;
+    }
+    let batal = false;
+    const lepas = p.padaProgres((persen) => {
+      if (!batal) setPembaruan((s) => (s.tahap === 'unduh' ? { tahap: 'unduh', persen } : s));
+    });
+    (async () => {
+      setPembaruan({ tahap: 'cek' });
+      const cek = await p.cek().catch((e: unknown) => ({ didukung: true, galat: String(e), versi: null, ada: false }));
+      if (batal) return;
+      if (!cek.didukung) return setPembaruan({ tahap: 'tidak-didukung' });
+      if (cek.galat || !cek.versi) return setPembaruan({ tahap: 'gagal', pesan: 'Installer aplikasi belum tersedia di server.' });
+      if (cek.versi !== versiServer) {
+        return setPembaruan({ tahap: 'gagal', pesan: `Server menyediakan installer ${cek.versi}, bukan ${versiServer}.` });
+      }
+      setPembaruan({ tahap: 'unduh', persen: 0 });
+      const u = await p.unduh().catch((e: unknown) => ({ ok: false, galat: String(e) }));
+      if (batal) return;
+      if (!u.ok) return setPembaruan({ tahap: 'gagal', pesan: `Pembaruan gagal diunduh${u.galat ? `: ${u.galat}` : '.'}` });
+      setPembaruan({ tahap: 'pasang' });
+      await new Promise((r) => setTimeout(r, 1500));
+      if (!batal && !(await p.pasang().catch(() => false))) {
+        setPembaruan({ tahap: 'gagal', pesan: 'Pembaruan tidak bisa dipasang sekarang.' });
+      }
+    })();
+    return () => {
+      batal = true;
+      lepas();
+    };
+  }, [perluPembaruan, versiServer, ulangPembaruan]);
 
   // ---------------- Kamera ----------------
   const [kamera, setKamera] = useState<{ id: string; nama: string }[]>([]);
@@ -151,12 +196,36 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
         <Baris judul="Versi aplikasi" ok={info.isSuccess ? versiCocok : info.isError ? false : null}>
           {!info.isSuccess && <p className="text-muted-foreground">Menunggu koneksi ke server.</p>}
           {info.isSuccess && versiCocok && <p>Aplikasi {versiApp} sama dengan server.</p>}
-          {info.isSuccess && !versiCocok && (
-            <p className="text-merah">
-              {versiServer
-                ? `Aplikasi ${versiApp || '(tidak diketahui)'} berbeda dengan server ${versiServer}. Pasang aplikasi versi ${versiServer}.`
-                : 'Server belum memberi tahu versinya. Perbarui server ke versi terbaru.'}
-            </p>
+          {info.isSuccess && !versiCocok && !versiServer && (
+            <p className="text-merah">Server belum memberi tahu versinya. Perbarui server ke versi terbaru.</p>
+          )}
+          {perluPembaruan && (
+            <div className="space-y-2">
+              <p>Aplikasi {versiApp || '(tidak diketahui)'} berbeda dengan server {versiServer}.</p>
+              {pembaruan.tahap === 'cek' && <p className="text-muted-foreground">Memeriksa pembaruan di server...</p>}
+              {pembaruan.tahap === 'unduh' && (
+                <div>
+                  <p>Mengunduh pembaruan versi {versiServer}... {pembaruan.persen}%</p>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-garis" role="progressbar" aria-valuenow={pembaruan.persen} aria-valuemin={0} aria-valuemax={100} aria-label="Unduhan pembaruan">
+                    <div className="h-full bg-biru transition-[width]" style={{ width: `${pembaruan.persen}%` }} />
+                  </div>
+                </div>
+              )}
+              {pembaruan.tahap === 'pasang' && (
+                <p className="font-semibold">
+                  Memasang pembaruan. Aplikasi akan ditutup dan dibuka lagi. Bila Windows meminta izin administrator, minta pengawas menyetujuinya.
+                </p>
+              )}
+              {pembaruan.tahap === 'gagal' && (
+                <>
+                  <p className="text-merah">{pembaruan.pesan} Pasang aplikasi versi {versiServer} secara manual, atau coba lagi.</p>
+                  <Button variant="outline" size="sm" onClick={() => setUlangPembaruan((n) => n + 1)}><ArrowClockwise /> Coba lagi</Button>
+                </>
+              )}
+              {pembaruan.tahap === 'tidak-didukung' && (
+                <p className="text-merah">Aplikasi ini belum bisa memperbarui diri. Pasang aplikasi versi {versiServer} secara manual.</p>
+              )}
+            </div>
           )}
         </Baris>
 

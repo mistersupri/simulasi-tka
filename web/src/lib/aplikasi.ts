@@ -18,6 +18,13 @@ type JembatanAplikasi = {
     padaBingkai: (cb: (token: string, data: Uint8Array) => void) => () => void;
     padaBerhenti: (cb: (token: string, info: { nama: string; pesan: string }) => void) => () => void;
   };
+  /** Pembaruan otomatis dari server sekolah. Tidak ada di aplikasi lama. */
+  pembaruan?: {
+    cek: () => Promise<{ didukung: boolean; versi?: string | null; ada?: boolean; galat?: string }>;
+    unduh: () => Promise<{ ok: boolean; galat?: string }>;
+    pasang: () => Promise<boolean>;
+    padaProgres: (cb: (persen: number) => void) => () => void;
+  };
   /** Tangkapan seluruh layar (JPEG) oleh aplikasi, tanpa dialog berbagi layar. */
   tangkapLayar: () => Promise<Uint8Array | null>;
   /**

@@ -32,6 +32,7 @@ Arah desain (warna, huruf, motif "stiker") dijelaskan di [`DESIGN.md`](DESIGN.md
 | Rekam layar | Tangkapan layar berkala (30 detik sampai 5 menit, diatur per ujian) dan sesaat setelah setiap pelanggaran, sehingga terlihat apa yang dibuka siswa saat pindah tab. Di browser, siswa wajib membagikan **seluruh layar**; berhenti berbagi dicatat dan spanduk memintanya berbagi lagi. Di aplikasi Windows layar diambil langsung tanpa dialog. Pengawas melihatnya di Monitor dan detail hasil. |
 | Batas pelanggaran | Pelanggaran tidak menghentikan pengerjaan: siswa hanya mendapat notifikasi. Pada pelanggaran ke-5 (diatur per ujian) muncul peringatan yang wajib dikonfirmasi. Pada pelanggaran ke-10 (diatur per ujian) ujian dihentikan dan jawaban dikirim otomatis; siswa tidak bisa melanjutkan. 0 = tanpa peringatan / hanya dicatat. |
 | Wajib aplikasi | Ujian bisa dibatasi hanya lewat aplikasi ujian Windows ([`desktop/`](../desktop/README.md)), yang mengunci layar dan memblokir tangkapan layar. Butuh `KUNCI_APLIKASI` di server. |
+| Pembaruan aplikasi | Server menyajikan installer aplikasi Windows yang ikut rilis (folder `pembaruan/`, atau `PEMBARUAN_DIR`). Aplikasi yang versinya berbeda dengan server memperbarui dirinya otomatis di layar persiapan. |
 | Monitor | Guru melihat progres, sisa waktu, jumlah pelanggaran, dan foto bukti secara langsung; bisa menambah waktu, mengirim paksa, atau mereset. |
 
 > **Batasan yang perlu diketahui sekolah.** Pengawasan di browser membuat kecurangan

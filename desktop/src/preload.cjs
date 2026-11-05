@@ -33,6 +33,17 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
       return () => ipcRenderer.removeListener('tka:kamera-native-berhenti', h);
     },
   },
+  /** Pembaruan otomatis dari server sekolah (hanya di layar persiapan). */
+  pembaruan: {
+    cek: () => ipcRenderer.invoke('tka:pembaruan-cek'),
+    unduh: () => ipcRenderer.invoke('tka:pembaruan-unduh'),
+    pasang: () => ipcRenderer.invoke('tka:pembaruan-pasang'),
+    padaProgres: (cb) => {
+      const h = (_e, persen) => cb(persen);
+      ipcRenderer.on('tka:pembaruan-progres', h);
+      return () => ipcRenderer.removeListener('tka:pembaruan-progres', h);
+    },
+  },
   /** Muat ulang server (dipakai halaman galat koneksi). */
   cobaLagi: () => ipcRenderer.send('tka:coba-lagi'),
   /** Tangkapan seluruh layar (JPEG) untuk ujian yang merekam layar. */
