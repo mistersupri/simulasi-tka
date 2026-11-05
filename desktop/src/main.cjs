@@ -41,31 +41,12 @@ if (SERVER.startsWith('http://')) {
 // Aman di sini karena aplikasi hanya memuat server sekolah.
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 
-// Mode kamera (Windows). Chromium punya beberapa jalur penangkapan kamera; di sebagian laptop salah satunya
-// tidak mengirim gambar sama sekali walau lampu webcam menyala. Mode dipilih di layar persiapan, disimpan
-// di folder data aplikasi, dan berlaku setelah aplikasi dimulai ulang (flag Chromium hanya terbaca saat mulai).
-const MODE_KAMERA = ['standar', 'native', 'directshow', 'mf-tanpa-d3d11', 'tanpa-gpu'];
-// Pembaca kamera native (desktop/kamera-native, ikut installer Windows sebagai extraResources).
+// Kamera di Windows dibaca lewat kamera-native.exe (Windows.Media.Capture, API yang sama dengan aplikasi
+// Camera bawaan Windows; ikut installer sebagai extraResources). Jalur kamera Chromium di sebagian laptop
+// tidak mengirim gambar walau lampu webcam menyala. Bila exe tidak ada, kamera memakai jalur Chromium biasa.
 const BERKAS_KAMERA_NATIVE = path.join(process.resourcesPath, 'kamera-native', 'kamera-native.exe');
 const kameraNativeAda = () => process.platform === 'win32' && fs.existsSync(BERKAS_KAMERA_NATIVE);
-const berkasModeKamera = () => path.join(app.getPath('userData'), 'mode-kamera.json');
-function bacaModeKamera() {
-  try {
-    const mode = JSON.parse(fs.readFileSync(berkasModeKamera(), 'utf8')).mode;
-    return MODE_KAMERA.includes(mode) ? mode : 'standar';
-  } catch {
-    return 'standar';
-  }
-}
-let modeKamera = process.platform === 'win32' ? bacaModeKamera() : 'standar';
-if (modeKamera === 'native' && !kameraNativeAda()) modeKamera = 'standar';
-if (modeKamera === 'directshow') {
-  app.commandLine.appendSwitch('disable-features', 'MediaFoundationVideoCapture');
-} else if (modeKamera === 'mf-tanpa-d3d11') {
-  app.commandLine.appendSwitch('disable-features', 'MediaFoundationD3D11VideoCapture,MediaFoundationD3D11VideoCaptureZeroCopy');
-} else if (modeKamera === 'tanpa-gpu') {
-  app.disableHardwareAcceleration();
-}
+const modeKamera = kameraNativeAda() ? 'native' : 'standar';
 
 let jendela = null;
 /** Jendela utama baru masuk mode kiosk setelah layar persiapan selesai. */
@@ -288,24 +269,7 @@ ipcMain.on('tka:masuk-kiosk', (e) => {
 
 ipcMain.handle('tka:mode-kamera', (e) => {
   if (e.sender !== jendela?.webContents) return null;
-  return { mode: modeKamera, daftar: process.platform === 'win32' ? MODE_KAMERA.filter((m) => m !== 'native' || kameraNativeAda()) : ['standar'] };
-});
-
-/** Ganti mode kamera lalu mulai ulang aplikasi. Hanya di layar persiapan (belum mode kiosk/ujian). */
-ipcMain.handle('tka:ganti-mode-kamera', (e, mode) => {
-  if (e.sender !== jendela?.webContents || kioskAktif || sedangUjian() || !MODE_KAMERA.includes(mode)) return false;
-  if (mode === 'native' && !kameraNativeAda()) return false;
-  try {
-    fs.mkdirSync(app.getPath('userData'), { recursive: true });
-    fs.writeFileSync(berkasModeKamera(), JSON.stringify({ mode }));
-  } catch (err) {
-    console.error('Gagal menyimpan mode kamera', err);
-    return false;
-  }
-  bolehTutup = true;
-  app.relaunch();
-  setTimeout(() => app.exit(0), 50);
-  return true;
+  return { mode: modeKamera, daftar: [modeKamera] };
 });
 
 // ---------------------------------------------------------------------------

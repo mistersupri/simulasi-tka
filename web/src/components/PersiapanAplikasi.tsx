@@ -1,6 +1,6 @@
-import { ArrowClockwise, ArrowRight, Camera, CheckCircle, CircleNotch, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowRight, CheckCircle, CircleNotch, WarningCircle } from '@phosphor-icons/react';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BilahKepala } from '@/components/Merek';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,6 @@ import { api } from '@/lib/api';
 import { aplikasi } from '@/lib/aplikasi';
 import { jelaskanGalatKamera } from '@/lib/kamera';
 import { bukaKameraDenganBatas, daftarKamera, jedaKamera, kameraInframerah, kameraPilihan, simpanKameraPilihan, videoHitam } from '@/lib/kameraPerangkat';
-import { cn } from '@/lib/utils';
 
 const KUNCI_SIAP = 'tka_siap';
 
@@ -22,17 +21,15 @@ export function tandaSiap() {
 }
 
 type InfoServer = { namaInstansi: string; versi?: string };
-type StatusTes = 'idle' | 'memuat' | 'ok' | 'hitam' | 'gagal';
+type StatusPratinjau = 'mati' | 'memuat' | 'ok' | 'hitam' | 'gagal';
 
-const LABEL_MODE: Record<string, string> = {
-  'standar': 'Standar (seperti Chrome)',
-  'native': 'Native Windows (seperti aplikasi Camera)',
-  'directshow': 'DirectShow (webcam lama)',
-  'mf-tanpa-d3d11': 'Media Foundation tanpa akselerasi kamera',
-  'tanpa-gpu': 'Tanpa akselerasi GPU',
-};
+async function pesanGalatKamera(err: unknown) {
+  const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
+  const p = jelaskanGalatKamera(err as Error, { diAplikasi: !!aplikasi, statusOs });
+  return `${p.judul}. ${p.isi} (Kode: ${p.detail})`;
+}
 
-/** Layar pertama aplikasi ujian: koneksi ke server, kecocokan versi, dan pemilihan kamera. */
+/** Layar pertama aplikasi ujian: koneksi ke server, kecocokan versi, dan kamera yang dipakai beserta pratinjaunya. */
 export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const info = useQuery({
     queryKey: ['persiapan', 'server'],
@@ -50,35 +47,19 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
   const versiCocok = !!versiApp && versiApp === versiServer;
   const siapLanjut = info.isSuccess && versiCocok;
 
+  // ---------------- Kamera ----------------
   const [kamera, setKamera] = useState<{ id: string; nama: string }[]>([]);
   const [pilih, setPilih] = useState(() => kameraPilihan() ?? '');
-  const [statusKamera, setStatusKamera] = useState<'belum' | 'memuat' | 'siap' | 'gagal'>('belum');
-  const [pesanKamera, setPesanKamera] = useState('');
-  const [tes, setTes] = useState<StatusTes>('idle');
-  const [infoTes, setInfoTes] = useState('');
+  const [memuatDaftar, setMemuatDaftar] = useState(true);
+  const [galatDaftar, setGalatDaftar] = useState('');
+  const [pratinjau, setPratinjau] = useState<StatusPratinjau>('mati');
+  const [galatPratinjau, setGalatPratinjau] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const mode = useQuery({
-    queryKey: ['persiapan', 'mode-kamera'],
-    queryFn: async () => (await aplikasi?.modeKamera?.()) ?? null,
-    enabled: !!aplikasi?.modeKamera,
-    staleTime: Infinity,
-  });
-  const [modeBaru, setModeBaru] = useState('');
-  const [memulaiUlang, setMemulaiUlang] = useState(false);
-  async function terapkanMode() {
-    if (!modeBaru || !aplikasi?.gantiModeKamera) return;
-    setMemulaiUlang(true);
-    const ok = await aplikasi.gantiModeKamera(modeBaru).catch(() => false);
-    if (!ok) {
-      setMemulaiUlang(false);
-      setPesanKamera('Mode kamera gagal disimpan. Coba lagi.');
-    }
-  }
 
-  /** Izin kamera diminta sekali; setelah itu nama kamera terbaca dan bisa dipilih. */
-  async function aktifkanKamera() {
-    setStatusKamera('memuat');
-    setPesanKamera('');
+  /** Izin kamera diminta sekali agar nama kamera terbaca, lalu daftar kamera dimuat. */
+  const muatDaftar = useCallback(async () => {
+    setMemuatDaftar(true);
+    setGalatDaftar('');
     try {
       const izin = await bukaKameraDenganBatas();
       izin.getTracks().forEach((t) => t.stop());
@@ -86,65 +67,62 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
       const daftar = await daftarKamera();
       setKamera(daftar);
       if (!daftar.length) {
-        setStatusKamera('gagal');
-        setPesanKamera('Tidak ada kamera yang terdeteksi. Periksa kabel USB atau Device Manager.');
+        setGalatDaftar('Tidak ada kamera yang terdeteksi. Periksa kabel USB atau Device Manager.');
         return;
       }
       const tersimpan = kameraPilihan();
       const awal = tersimpan && daftar.some((d) => d.id === tersimpan) ? tersimpan : daftar[0].id;
       setPilih(awal);
       simpanKameraPilihan(awal);
-      setStatusKamera('siap');
     } catch (err) {
-      const statusOs = await aplikasi?.statusKamera?.().catch(() => null);
-      const p = jelaskanGalatKamera(err as Error, { diAplikasi: !!aplikasi, statusOs });
-      setStatusKamera('gagal');
-      setPesanKamera(`${p.judul}. ${p.isi} (Kode: ${p.detail})`);
+      setGalatDaftar(await pesanGalatKamera(err));
+    } finally {
+      setMemuatDaftar(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    void muatDaftar();
+  }, [muatDaftar]);
+
+  // Pratinjau langsung untuk kamera yang dipilih; berganti saat pilihan berganti, mati saat layar ditinggalkan.
+  const [ulangPratinjau, setUlangPratinjau] = useState(0);
+  const adaPilihan = kamera.some((k) => k.id === pilih);
+  useEffect(() => {
+    if (!adaPilihan) return;
+    let berhenti = false;
+    let stream: MediaStream | null = null;
+    (async () => {
+      setPratinjau('memuat');
+      setGalatPratinjau('');
+      try {
+        stream = await bukaKameraDenganBatas({ deviceId: pilih });
+        if (berhenti) return;
+        const v = videoRef.current;
+        if (!v) return;
+        v.srcObject = stream;
+        await v.play().catch(() => {});
+        await jedaKamera(2000);
+        if (!berhenti) setPratinjau(videoHitam(v) ? 'hitam' : 'ok');
+      } catch (err) {
+        if (berhenti) return;
+        setPratinjau('gagal');
+        setGalatPratinjau(await pesanGalatKamera(err));
+      }
+    })();
+    return () => {
+      berhenti = true;
+      stream?.getTracks().forEach((t) => t.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+  }, [pilih, adaPilihan, ulangPratinjau]);
 
   function pilihKamera(id: string) {
     setPilih(id);
     simpanKameraPilihan(id);
-    setTes('idle');
   }
 
-  /** Menyalakan kamera yang dipilih selama dua detik untuk memastikan gambarnya tidak hitam. Dibatasi 20 detik. */
-  async function tesKamera() {
-    setTes('memuat');
-    setPesanKamera('');
-    setInfoTes('');
-    let s: MediaStream | null = null;
-    try {
-      s = await bukaKameraDenganBatas({ deviceId: pilih }, 20000);
-      const v = videoRef.current;
-      if (!v) throw new Error('Pratinjau tidak tersedia.');
-      v.srcObject = s;
-      // Hitung bingkai yang benar-benar sampai ke aplikasi: 0 berarti kamera tidak mengirim gambar.
-      let bingkai = 0;
-      let hitungAktif = true;
-      const hitung = () => {
-        if (!hitungAktif) return;
-        bingkai++;
-        v.requestVideoFrameCallback?.(hitung);
-      };
-      v.requestVideoFrameCallback?.(hitung);
-      await v.play().catch(() => {});
-      await jedaKamera(2000);
-      hitungAktif = false;
-      const ukuran = s.getVideoTracks()[0]?.getSettings();
-      setInfoTes(`Bingkai diterima: ${bingkai}. Ukuran: ${ukuran?.width ?? '?'}×${ukuran?.height ?? '?'}.${mode.data ? ` Mode: ${LABEL_MODE[mode.data.mode] ?? mode.data.mode}.` : ''}`);
-      setTes(videoHitam(v) ? 'hitam' : 'ok');
-    } catch (err) {
-      setTes('gagal');
-      setPesanKamera(err instanceof Error && err.message.startsWith('Timeout') ? 'Kamera tidak merespons dalam 20 detik.' : 'Kamera ini tidak bisa dibuka. Pilih kamera lain.');
-    } finally {
-      s?.getTracks().forEach((t) => t.stop());
-      if (videoRef.current) videoRef.current.srcObject = null;
-    }
-  }
-
-  const okKamera = tes === 'ok' ? true : tes === 'hitam' || tes === 'gagal' || statusKamera === 'gagal' ? false : null;
+  const okKamera = pratinjau === 'ok' ? true : pratinjau === 'hitam' || pratinjau === 'gagal' || !!galatDaftar ? false : null;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -183,14 +161,15 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
         </Baris>
 
         <Baris judul="Kamera" ok={okKamera}>
-          <p className="text-muted-foreground">Kamera hanya dipakai untuk ujian yang diawasi kamera. Bila belum dipilih, aplikasi memakai kamera bawaan.</p>
-          {statusKamera !== 'siap' ? (
-            <Button variant="outline" className="mt-3" onClick={aktifkanKamera} disabled={statusKamera === 'memuat'}>
-              {statusKamera === 'memuat' ? <CircleNotch className="animate-spin" /> : <Camera />}
-              {statusKamera === 'memuat' ? 'Menyiapkan kamera...' : 'Izinkan dan tampilkan daftar kamera'}
-            </Button>
-          ) : (
-            <div className="mt-3 space-y-3">
+          {memuatDaftar && <p className="text-muted-foreground">Mencari kamera...</p>}
+          {!memuatDaftar && galatDaftar && (
+            <>
+              <p role="alert" className="rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-merah">{galatDaftar}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => void muatDaftar()}><ArrowClockwise /> Cari lagi</Button>
+            </>
+          )}
+          {!memuatDaftar && kamera.length > 0 && (
+            <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="pk-kamera">Kamera yang dipakai</Label>
                 <Select value={pilih} onValueChange={pilihKamera}>
@@ -204,46 +183,20 @@ export function PersiapanAplikasi({ onLanjut }: { onLanjut: () => void }) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button variant="outline" size="sm" onClick={tesKamera} disabled={tes === 'memuat' || !pilih}>
-                  {tes === 'memuat' ? <CircleNotch className="animate-spin" /> : <Camera />} Tes kamera ini
-                </Button>
-                {tes === 'ok' && <span className="text-sm font-semibold text-hijau">Gambar terlihat.</span>}
-                {tes === 'hitam' && <span className="text-sm font-semibold text-merah">Gambar hitam. Pilih kamera lain, atau periksa penutup lensa webcam.</span>}
-                {infoTes && <span className="w-full text-xs text-muted-foreground">{infoTes}</span>}
-                {tes === 'gagal' && <span className="text-sm font-semibold text-merah">{pesanKamera || 'Kamera ini tidak bisa dibuka. Pilih kamera lain.'}</span>}
+              <div className="relative h-44 w-full max-w-60 overflow-hidden rounded-md bg-tinta">
+                <video ref={videoRef} muted playsInline aria-label="Pratinjau kamera" className="size-full object-cover -scale-x-100" />
+                {pratinjau === 'memuat' && (
+                  <span className="absolute inset-0 grid place-items-center text-sm text-white"><CircleNotch className="size-6 animate-spin" /></span>
+                )}
               </div>
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                aria-label="Pratinjau kamera"
-                className={cn('h-36 w-48 rounded-md bg-tinta object-cover -scale-x-100', tes === 'idle' && 'sr-only')}
-              />
+              {pratinjau === 'ok' && <p className="text-sm font-semibold text-hijau">Gambar terlihat.</p>}
+              {pratinjau === 'hitam' && <p className="text-sm font-semibold text-merah">Gambar hitam. Pilih kamera lain, atau periksa penutup lensa webcam.</p>}
+              {pratinjau === 'gagal' && <p role="alert" className="rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-sm text-merah">{galatPratinjau}</p>}
+              {(pratinjau === 'hitam' || pratinjau === 'gagal') && (
+                <Button variant="outline" size="sm" onClick={() => setUlangPratinjau((n) => n + 1)}><ArrowClockwise /> Coba lagi</Button>
+              )}
             </div>
           )}
-          {mode.data && mode.data.daftar.length > 1 && (
-            <div className="mt-4 space-y-1.5 border-t border-garis pt-4">
-              <Label htmlFor="pk-mode">Mode kamera aplikasi</Label>
-              <p className="text-xs text-muted-foreground">
-                Bila tes menunjukkan <b>Bingkai diterima: 0</b> atau gambar hitam di semua kamera, pilih mode lain. Aplikasi akan mulai ulang; pilihan tersimpan di komputer ini.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Select value={modeBaru || mode.data.mode} onValueChange={setModeBaru}>
-                  <SelectTrigger id="pk-mode" className="min-w-64 flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {mode.data.daftar.map((m) => (
-                      <SelectItem key={m} value={m}>{LABEL_MODE[m] ?? m}{m === mode.data!.mode ? ' (sedang dipakai)' : ''}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" onClick={terapkanMode} disabled={memulaiUlang || !modeBaru || modeBaru === mode.data.mode}>
-                  {memulaiUlang ? <CircleNotch className="animate-spin" /> : <ArrowClockwise />} Terapkan & mulai ulang
-                </Button>
-              </div>
-            </div>
-          )}
-          {pesanKamera && <p role="alert" className="mt-3 rounded-md border border-merah/30 bg-merah-muda px-3 py-2 text-merah">{pesanKamera}</p>}
         </Baris>
 
         <div className="mt-auto pt-4">

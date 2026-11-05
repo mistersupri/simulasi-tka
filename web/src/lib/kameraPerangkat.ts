@@ -54,16 +54,28 @@ async function cobaUlang(buka: () => Promise<MediaStream>): Promise<MediaStream>
  */
 export async function bukaKamera(opsi: { polos?: boolean; deviceId?: string } = {}): Promise<MediaStream> {
   if (!opsi.polos && (await pakaiKameraNative())) {
-    if (opsi.deviceId) return bukaKameraNative(opsi.deviceId);
+    if (opsi.deviceId) {
+      try {
+        return await bukaKameraNative(opsi.deviceId);
+      } catch (err) {
+        if ((err as Error)?.name !== 'NotFoundError') throw err;
+      }
+      // Id bukan milik kamera native (mis. dari jalur Chromium): buka lewat Chromium.
+      return cobaUlang(() => bukaSekali(false, opsi.deviceId));
+    }
     const pilihan = kameraPilihan();
     if (pilihan) {
       try {
         return await bukaKameraNative(pilihan);
       } catch {
-        // Kamera pilihan tidak ada (mis. id dari mode lain) atau gagal: pakai kamera pertama.
+        // Kamera pilihan tidak ada atau gagal: coba kamera native pertama.
       }
     }
-    return bukaKameraNative();
+    try {
+      return await bukaKameraNative();
+    } catch {
+      // Kamera native gagal di perangkat ini: pakai jalur kamera Chromium di bawah.
+    }
   }
   if (!opsi.polos && !opsi.deviceId) {
     const pilihan = kameraPilihan();
@@ -138,7 +150,10 @@ export const kameraInframerah = (nama: string) => KAMERA_INFRAMERAH.test(nama);
  * Mengembalikan pasangan id + nama; daftar kosong bila perangkat belum membuka label/id.
  */
 export async function daftarKamera(kecuali?: string): Promise<{ id: string; nama: string }[]> {
-  if (await pakaiKameraNative()) return (await daftarKameraNative()).filter((d) => d.id !== kecuali);
+  if (await pakaiKameraNative()) {
+    const native = await daftarKameraNative();
+    if (native.length) return native.filter((d) => d.id !== kecuali);
+  }
   try {
     const semua = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.deviceId && d.deviceId !== kecuali);
     const unik = [...new Map(semua.map((d) => [d.deviceId, { id: d.deviceId, nama: d.label || 'kamera' }])).values()];

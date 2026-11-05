@@ -8,10 +8,8 @@ type JembatanAplikasi = {
   cobaLagi: () => void;
   /** Pindah ke mode kiosk (layar penuh). Dipanggil setelah layar persiapan. */
   masukKiosk?: () => void;
-  /** Mode penangkapan kamera (Windows) dan pilihannya. Tidak ada di aplikasi lama. */
+  /** Jalur kamera: "native" (Windows) atau "standar" (Chromium). Tidak ada di aplikasi lama. */
   modeKamera?: () => Promise<{ mode: string; daftar: string[] } | null>;
-  /** Simpan mode kamera lalu mulai ulang aplikasi. */
-  gantiModeKamera?: (mode: string) => Promise<boolean>;
   /** Kamera native Windows (mode "native"): proses terpisah yang mengirim JPEG. */
   kameraNative?: {
     daftar: () => Promise<{ id: string; nama: string }[]>;

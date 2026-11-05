@@ -15,10 +15,8 @@ contextBridge.exposeInMainWorld('aplikasiTka', {
   jeda: () => jeda,
   /** Layar persiapan selesai: pindah ke mode kiosk (layar penuh). */
   masukKiosk: () => ipcRenderer.send('tka:masuk-kiosk'),
-  /** Mode penangkapan kamera saat ini dan daftar pilihannya (Windows). */
+  /** Jalur kamera yang dipakai: "native" (Windows, kamera-native.exe) atau "standar" (Chromium). */
   modeKamera: () => ipcRenderer.invoke('tka:mode-kamera'),
-  /** Simpan mode kamera lalu mulai ulang aplikasi. Hanya bisa di layar persiapan. */
-  gantiModeKamera: (mode) => ipcRenderer.invoke('tka:ganti-mode-kamera', mode),
   /** Kamera native Windows: proses terpisah yang mengirim JPEG (mode kamera "native"). */
   kameraNative: {
     daftar: () => ipcRenderer.invoke('tka:kamera-native-daftar'),
