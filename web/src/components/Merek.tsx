@@ -1,6 +1,17 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useInfo } from '@/hooks/useProfil';
 import { cn } from '@/lib/utils';
+
+export const NAMA_APLIKASI_BAWAAN = 'Simulasi Tes Kemampuan Akademik';
+
+/** Judul tab/jendela mengikuti nama aplikasi di Pengaturan (juga judul jendela aplikasi ujian Windows). */
+export function JudulDokumen() {
+  const { data: info } = useInfo();
+  useEffect(() => {
+    if (info?.namaAplikasi) document.title = info.namaAplikasi;
+  }, [info?.namaAplikasi]);
+  return null;
+}
 
 /** Identitas sekolah: logo unggahan bila ada, selain itu nama sekolah sebagai teks. */
 export function Merek({ className, kecil, terang }: { className?: string; kecil?: boolean; terang?: boolean }) {
@@ -11,9 +22,9 @@ export function Merek({ className, kecil, terang }: { className?: string; kecil?
         <img src="/api/logo" alt="" className={cn('shrink-0 rounded-sm bg-white object-contain p-0.5', kecil ? 'size-9' : 'size-11')} />
       )}
       <div className="min-w-0 leading-tight">
-        <div className={cn('truncate font-semibold', kecil ? 'text-[15px]' : 'text-lg')}>{info?.namaInstansi ?? 'Simulasi TKA'}</div>
+        <div className={cn('truncate font-semibold', kecil ? 'text-[15px]' : 'text-lg')}>{info?.namaInstansi ?? NAMA_APLIKASI_BAWAAN}</div>
         <div className={cn('truncate text-xs', terang ? 'text-biru-pucat' : 'text-muted-foreground')}>
-          Simulasi Tes Kemampuan Akademik{info?.tahunAjaran ? ` · Tahun Ajaran ${info.tahunAjaran}` : ''}
+          {info?.namaAplikasi ?? NAMA_APLIKASI_BAWAAN}{info?.tahunAjaran ? ` · Tahun Ajaran ${info.tahunAjaran}` : ''}
         </div>
       </div>
     </div>

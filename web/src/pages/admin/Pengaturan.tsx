@@ -14,7 +14,7 @@ import { api, pesanGalat } from '@/lib/api';
 import { perkecilGambar } from '@/lib/gambar';
 
 type Data = {
-  pengaturan: { NAMA_SEKOLAH: string; TAHUN_AJARAN: string; PENGUMUMAN: string; KKM: string; SISWA_BOLEH_GANTI_PASSWORD: string; SIMPAN_TANGKAPAN_HARI: string };
+  pengaturan: { NAMA_SEKOLAH: string; NAMA_APLIKASI: string; TAHUN_AJARAN: string; PENGUMUMAN: string; KKM: string; SISWA_BOLEH_GANTI_PASSWORD: string; SIMPAN_TANGKAPAN_HARI: string };
   adaLogo: boolean;
 };
 type LaporanImpor = { siswa: number; soal: number; ujian: number; dilewati: { lembar: string; baris: number; alasan: string }[] };
@@ -22,7 +22,7 @@ type LaporanImpor = { siswa: number; soal: number; ujian: number; dilewati: { le
 export default function HalamanPengaturan() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['pengaturan'], queryFn: () => api.get<Data>('/admin/pengaturan') });
-  const [d, setD] = useState({ NAMA_SEKOLAH: '', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: '70', SISWA_BOLEH_GANTI_PASSWORD: true, SIMPAN_TANGKAPAN_HARI: '30' });
+  const [d, setD] = useState({ NAMA_SEKOLAH: '', NAMA_APLIKASI: '', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: '70', SISWA_BOLEH_GANTI_PASSWORD: true, SIMPAN_TANGKAPAN_HARI: '30' });
   const [laporan, setLaporan] = useState<LaporanImpor | null>(null);
   const [sekolahImpor, setSekolahImpor] = useState('');
   const [versiLogo, setVersiLogo] = useState(0);
@@ -76,6 +76,11 @@ export default function HalamanPengaturan() {
           <form onSubmit={(e) => { e.preventDefault(); simpan.mutate(); }} className="space-y-4">
             <CardTitle>Identitas instansi</CardTitle>
             <div className="space-y-1.5"><Label htmlFor="p-nama">Nama instansi</Label><Input id="p-nama" value={d.NAMA_SEKOLAH} onChange={(e) => setD({ ...d, NAMA_SEKOLAH: e.target.value })} required /></div>
+            <div className="space-y-1.5">
+              <Label htmlFor="p-aplikasi">Nama aplikasi</Label>
+              <Input id="p-aplikasi" value={d.NAMA_APLIKASI} maxLength={80} onChange={(e) => setD({ ...d, NAMA_APLIKASI: e.target.value })} required />
+              <p className="text-xs text-muted-foreground">Tampil di bawah nama instansi di setiap halaman, di judul tab dan jendela aplikasi ujian, serta di kartu login.</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label htmlFor="p-tahun">Tahun ajaran</Label><Input id="p-tahun" value={d.TAHUN_AJARAN} onChange={(e) => setD({ ...d, TAHUN_AJARAN: e.target.value })} /></div>
               <div className="space-y-1.5"><Label htmlFor="p-kkm">KKM</Label><Input id="p-kkm" type="number" min={0} max={100} value={d.KKM} onChange={(e) => setD({ ...d, KKM: e.target.value })} /><p className="text-xs text-muted-foreground">0 = tanpa KKM</p></div>

@@ -61,6 +61,8 @@ rutAdminSistem.get('/pengaturan', butuhStaf('ADMIN'), async (_req, res) => {
 rutAdminSistem.put('/pengaturan', butuhStaf('ADMIN'), async (req, res) => {
   const d = z.object({
     NAMA_SEKOLAH: z.string().trim().min(1, 'Nama instansi wajib diisi.'),
+    // Opsional agar formulir lama tidak menghapus nama aplikasi yang sudah diatur.
+    NAMA_APLIKASI: z.string().trim().min(1, 'Nama aplikasi wajib diisi.').max(80, 'Nama aplikasi maksimal 80 karakter.').optional(),
     TAHUN_AJARAN: z.string().trim(),
     PENGUMUMAN: z.string().trim().max(1000),
     KKM: z.coerce.number().int().min(0, 'KKM harus 0 sampai 100.').max(100, 'KKM harus 0 sampai 100.').transform(String),

@@ -9,7 +9,7 @@ export type SekolahPilihan = { id: string; nama: string; npsn: string | null; ak
 export type Sekolah = SekolahPilihan & {
   alamat: string; dibuat: string; jumlahSiswa: number; jumlahOperator: number; jumlahGuru: number; jumlahHasil: number; rataRata: number | null;
 };
-export type Info = { namaInstansi: string; tahunAjaran: string; pengumuman: string; adaLogo: boolean };
+export type Info = { namaInstansi: string; namaAplikasi: string; tahunAjaran: string; pengumuman: string; adaLogo: boolean };
 
 export type StatusUjian = 'TERSEDIA' | 'BERLANGSUNG' | 'SELESAI' | 'BELUM_DIBUKA' | 'DITUTUP';
 export type UjianSiswa = {

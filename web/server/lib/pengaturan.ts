@@ -3,6 +3,8 @@ import { prisma } from '../db.ts';
 export const PENGATURAN_BAWAAN = {
   // Nama instansi penyelenggara (Suku Dinas Pendidikan). Nama kunci NAMA_SEKOLAH dipertahankan agar data lama tetap terbaca.
   NAMA_SEKOLAH: 'Suku Dinas Pendidikan Wilayah II Jakarta Pusat',
+  // Nama aplikasi yang tampil di kepala halaman, judul tab/jendela, dan kartu login.
+  NAMA_APLIKASI: 'Simulasi Tes Kemampuan Akademik',
   TAHUN_AJARAN: '2026/2027',
   PENGUMUMAN: '',
   KKM: '70',
@@ -13,7 +15,7 @@ export const PENGATURAN_BAWAAN = {
 };
 
 export type Pengaturan = typeof PENGATURAN_BAWAAN;
-export const PENGATURAN_DAPAT_DIUBAH = ['NAMA_SEKOLAH', 'TAHUN_AJARAN', 'PENGUMUMAN', 'KKM', 'SISWA_BOLEH_GANTI_PASSWORD', 'SIMPAN_TANGKAPAN_HARI'] as const;
+export const PENGATURAN_DAPAT_DIUBAH = ['NAMA_SEKOLAH', 'NAMA_APLIKASI', 'TAHUN_AJARAN', 'PENGUMUMAN', 'KKM', 'SISWA_BOLEH_GANTI_PASSWORD', 'SIMPAN_TANGKAPAN_HARI'] as const;
 
 export async function ambilPengaturan(): Promise<Pengaturan> {
   const baris = await prisma.pengaturan.findMany();
@@ -24,7 +26,7 @@ export async function ambilPengaturan(): Promise<Pengaturan> {
 
 export async function simpanPengaturan(data: Partial<Pengaturan>) {
   await prisma.$transaction(
-    Object.entries(data).map(([kunci, nilai]) =>
+    Object.entries(data).filter(([, nilai]) => nilai !== undefined).map(([kunci, nilai]) =>
       prisma.pengaturan.upsert({ where: { kunci }, create: { kunci, nilai: String(nilai) }, update: { nilai: String(nilai) } }),
     ),
   );

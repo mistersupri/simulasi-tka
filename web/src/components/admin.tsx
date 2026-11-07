@@ -144,7 +144,7 @@ export function DialogAkun({ akun, judul, tutup, ditolak, petugas }: {
           <div className="grid grid-cols-2 gap-3">
             {akun.map((a) => (
               <div key={a.username} className="break-inside-avoid rounded-lg border border-dashed border-garis p-3 text-sm">
-                <p className="font-semibold">Kartu login Simulasi TKA</p>
+                <p className="font-semibold">Kartu login {info?.namaAplikasi ?? 'Simulasi TKA'}</p>
                 <p className="text-xs">{a.sekolah || info?.namaInstansi}</p>
                 <table className="mt-2"><tbody>
                   <tr><td className="pr-3">Nama</td><td className="font-semibold">{a.nama}</td></tr>

@@ -286,7 +286,13 @@ describe('admin', () => {
   it('pengaturan, logo, ganti sandi, backup, log', async () => {
     const { admin, siswa } = await siapkan();
     await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', TAHUN_AJARAN: '2026/2027', PENGUMUMAN: 'Halo', KKM: 75, SISWA_BOLEH_GANTI_PASSWORD: false }).expect(200);
-    expect((await request(app).get('/api/info')).body).toMatchObject({ namaInstansi: 'SD Uji', pengumuman: 'Halo' });
+    expect((await request(app).get('/api/info')).body).toMatchObject({ namaInstansi: 'SD Uji', pengumuman: 'Halo', namaAplikasi: 'Simulasi Tes Kemampuan Akademik' });
+    await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', NAMA_APLIKASI: 'Asesmen Digital Kota', TAHUN_AJARAN: '2026/2027', PENGUMUMAN: 'Halo', KKM: 75, SISWA_BOLEH_GANTI_PASSWORD: false }).expect(200);
+    expect((await request(app).get('/api/info')).body.namaAplikasi).toBe('Asesmen Digital Kota');
+    // Formulir tanpa NAMA_APLIKASI (versi lama) tidak menghapus nama yang sudah diatur.
+    await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', TAHUN_AJARAN: '2026/2027', PENGUMUMAN: 'Halo', KKM: 75, SISWA_BOLEH_GANTI_PASSWORD: false }).expect(200);
+    expect((await request(app).get('/api/info')).body.namaAplikasi).toBe('Asesmen Digital Kota');
+    await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', NAMA_APLIKASI: '  ', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: 75, SISWA_BOLEH_GANTI_PASSWORD: true }).expect(400);
     await admin.put('/api/admin/pengaturan').send({ NAMA_SEKOLAH: 'SD Uji', TAHUN_AJARAN: '', PENGUMUMAN: '', KKM: 200, SISWA_BOLEH_GANTI_PASSWORD: true }).expect(400);
 
     await admin.post('/api/admin/logo').attach('logo', PNG, 'logo.png').expect(200);
