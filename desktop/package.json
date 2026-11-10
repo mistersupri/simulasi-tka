@@ -20,7 +20,8 @@
       "package.json"
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "win": {
       "target": [
@@ -32,7 +33,8 @@
           "from": "kamera-native/publish/kamera-native.exe",
           "to": "kamera-native/kamera-native.exe"
         }
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -41,7 +43,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Ujian TKA",
-      "artifactName": "Ujian-TKA-Setup-${version}.exe"
+      "artifactName": "Ujian-TKA-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "linux": {
       "target": [
@@ -51,7 +55,8 @@
       "category": "Education",
       "maintainer": "Simulasi TKA <admin@simulasi-tka.invalid>",
       "synopsis": "Aplikasi ujian Simulasi TKA untuk komputer lab",
-      "artifactName": "Ujian-TKA-${version}-${arch}.${ext}"
+      "artifactName": "Ujian-TKA-${version}-${arch}.${ext}",
+      "icon": "build/icon.png"
     },
     "publish": [],
     "deb": {

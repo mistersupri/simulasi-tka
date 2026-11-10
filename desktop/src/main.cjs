@@ -432,6 +432,7 @@ function buatJendela() {
     autoHideMenuBar: true,
     backgroundColor: '#F3F5F8',
     title: 'Ujian TKA',
+    icon: path.join(__dirname, 'ikon.png'),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
